@@ -61,4 +61,4 @@ coverage.xml
 # Distribution
 dist/
 build/
-*.egg-info/
+*.egg-info/signal_bot.lock
