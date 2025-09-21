@@ -413,10 +413,13 @@ class GlobalFilterSystem:
             # Don't set a date here - let the page handler use the user's timezone
             date = None
 
-        # Get hours filter, but set to 0 if specific date is selected
+        # Get hours filter, but set to 0 if specific date is selected or today without hours
         hours = int(query.get('hours', [str(DEFAULTS['FILTER_HOURS'])])[0]) if 'hours' in query else DEFAULTS['FILTER_HOURS']
         if date_mode == 'specific':
             # When specific date is selected, ignore hours filter
+            hours = 0
+        elif date_mode == 'today' and 'hours' not in query:
+            # For "today" mode without explicit hours parameter, show whole day (not last 24 hours)
             hours = 0
 
         return {
