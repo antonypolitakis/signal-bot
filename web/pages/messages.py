@@ -104,6 +104,12 @@ class MessagesPage(BasePage):
                 }
 
                 function switchTab(newTab) {
+                    // Prevent multiple rapid clicks
+                    if (window.switchTabInProgress) {
+                        return;
+                    }
+                    window.switchTabInProgress = true;
+
                     // Keep current filters when switching tabs
                     const filters = GlobalFilters.getValues();
                     const newUrl = new URL('/messages', window.location.origin);
@@ -126,7 +132,8 @@ class MessagesPage(BasePage):
                         newUrl.searchParams.set('date_mode', 'all');
                     }
 
-                    window.location.href = newUrl.toString();
+                    // Use replace instead of href to avoid adding to browser history
+                    window.location.replace(newUrl.toString());
                 }
 
 
@@ -246,10 +253,10 @@ class MessagesPage(BasePage):
             {global_filters}
 
             <div class="tabs">
-                <a href="javascript:void(0)" onclick="switchTab('groups')" class="tab-btn {'active' if tab == 'groups' else ''}">By Group</a>
-                <a href="javascript:void(0)" onclick="switchTab('senders')" class="tab-btn {'active' if tab == 'senders' else ''}">By Sender</a>
-                <a href="javascript:void(0)" onclick="switchTab('all')" class="tab-btn {'active' if tab == 'all' else ''}">All Messages</a>
-                <a href="javascript:void(0)" onclick="switchTab('ai-analysis')" class="tab-btn {'active' if tab == 'ai-analysis' else ''}">AI Analysis</a>
+                <a href="#" onclick="switchTab('groups'); return false;" class="tab-btn {'active' if tab == 'groups' else ''}">By Group</a>
+                <a href="#" onclick="switchTab('senders'); return false;" class="tab-btn {'active' if tab == 'senders' else ''}">By Sender</a>
+                <a href="#" onclick="switchTab('all'); return false;" class="tab-btn {'active' if tab == 'all' else ''}">All Messages</a>
+                <a href="#" onclick="switchTab('ai-analysis'); return false;" class="tab-btn {'active' if tab == 'ai-analysis' else ''}">AI Analysis</a>
             </div>
 
             <div id="{tab}-tab" class="tab-content active">

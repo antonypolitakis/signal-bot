@@ -180,14 +180,21 @@ class GlobalFilterSystem:
         const GlobalFilters = {
             // Get all current filter values
             getValues: function() {
+                // Cache DOM elements for better performance
+                const groupFilter = document.getElementById('global-group-filter');
+                const senderFilter = document.getElementById('global-sender-filter');
                 const dateRadio = document.querySelector('input[name="date-mode"]:checked');
+                const dateInput = document.getElementById('global-date');
+                const hoursFilter = document.getElementById('global-hours-filter');
+                const attachmentsOnly = document.getElementById('global-attachments-only');
+
                 return {
-                    groupId: document.getElementById('global-group-filter') ? document.getElementById('global-group-filter').value : '',
-                    senderId: document.getElementById('global-sender-filter') ? document.getElementById('global-sender-filter').value : '',
+                    groupId: groupFilter ? groupFilter.value : '',
+                    senderId: senderFilter ? senderFilter.value : '',
                     dateMode: dateRadio ? dateRadio.value : 'all',
-                    date: document.getElementById('global-date') ? document.getElementById('global-date').value : '',
-                    hours: document.getElementById('global-hours-filter') ? parseInt(document.getElementById('global-hours-filter').value) : 0,
-                    attachmentsOnly: document.getElementById('global-attachments-only') ? document.getElementById('global-attachments-only').checked : false
+                    date: dateInput ? dateInput.value : '',
+                    hours: hoursFilter ? parseInt(hoursFilter.value) : 0,
+                    attachmentsOnly: attachmentsOnly ? attachmentsOnly.checked : false
                 };
             },
 
