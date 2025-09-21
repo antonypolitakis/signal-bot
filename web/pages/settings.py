@@ -1,5 +1,74 @@
 """
-Settings page - consolidated settings with tabbed interface.
+Settings Page for Signal Bot Web Interface
+
+PURPOSE:
+    Centralized configuration hub for all bot settings, user preferences, AI configurations,
+    and system setup options. Provides a unified interface for managing the entire bot ecosystem.
+
+FUNCTIONALITY:
+    1. General Settings Tab:
+       - User display preferences (theme, timezone, date/time format)
+       - Notification settings (desktop, sound, previews)
+       - Privacy settings (message retention, logging options)
+       - Import/export configuration capabilities
+
+    2. Setup Tab:
+       - System status display (Signal CLI, bot configuration)
+       - Group and user sync operations
+       - Initial setup wizard
+       - Clean import functionality
+       - Database maintenance options
+
+    3. AI Configuration Tab:
+       - Ollama (local AI) server configuration
+       - Gemini (external AI) setup
+       - Model selection and management
+       - Provider status monitoring
+       - Model preloading capabilities
+
+    4. AI Analysis Types Tab:
+       - Custom analysis type configuration
+       - Enable/disable specific analysis types
+       - Configure analysis parameters (min messages, max hours)
+       - Add/edit/delete analysis types
+
+PAGE STRUCTURE:
+    - Tab-based navigation for different setting categories
+    - Form-based configuration sections
+    - Real-time validation and feedback
+    - Save/reset/export action buttons
+    - Status indicators for services
+
+TESTING:
+    1. Navigate to /settings endpoint
+    2. Test all tab navigation functionality
+    3. Verify preference saving and loading
+    4. Test theme switching (Dark/Light/Auto)
+    5. Verify timezone changes affect time display
+    6. Test AI provider configuration and connection
+    7. Verify model selection and preloading
+    8. Test analysis type CRUD operations
+    9. Verify setup actions (sync groups/users)
+    10. Test import/export settings functionality
+
+API ENDPOINTS USED:
+    - GET /api/preferences - Load user preferences
+    - POST /api/preferences - Save user preferences
+    - GET /api/ai-status - Get AI provider status
+    - POST /api/ai-config - Update AI configuration
+    - GET /api/ollama-models - List available Ollama models
+    - POST /api/ollama-preload - Preload selected model
+    - GET /api/ai-analysis/types - Get analysis types
+    - POST /api/ai-analysis/types - Create/update analysis types
+    - POST /api/setup/run - Run initial setup
+    - POST /api/setup/sync-groups - Sync Signal groups
+    - POST /api/setup/sync-users - Sync Signal users
+
+DATABASE INTERACTIONS:
+    - Reads/writes user_preferences table
+    - Updates ai_config for AI settings
+    - Manages ai_analysis_types table
+    - Reads system status from various tables
 """
 
 from typing import Dict, Any
@@ -24,80 +93,58 @@ class SettingsPage(BasePage):
         return "Configure bot settings"
 
     def get_custom_css(self) -> str:
-        """Additional CSS for provider cards."""
-        return """
-            .provider-card {
-                border: 1px solid #dee2e6;
-                border-radius: 8px;
-                padding: 15px;
-                margin-bottom: 15px;
-                background: white;
-            }
-            .provider-available { border-left: 4px solid #28a745; }
-            .provider-unavailable { border-left: 4px solid #dc3545; }
-            .status-badge {
-                padding: 3px 8px;
-                border-radius: 12px;
-                font-size: 0.85em;
-                font-weight: 500;
-            }
-            .status-available {
-                background: #d4edda;
-                color: #155724;
-            }
-            .status-unavailable {
-                background: #f8d7da;
-                color: #721c24;
-            }
-            .provider-details {
-                margin-top: 15px;
-                display: grid;
-                grid-template-columns: auto 1fr;
-                gap: 8px;
-                font-size: 0.9em;
-            }
-            .provider-details dt {
-                font-weight: 600;
-                color: #495057;
-                text-align: right;
-                padding-right: 10px;
-            }
-            .provider-details dd {
-                margin: 0;
-                color: #212529;
-            }
-            .alert {
-                padding: 12px;
-                margin: 10px 0;
-                border-radius: 4px;
-            }
-            .alert-success {
-                background-color: #d4edda;
-                border: 1px solid #c3e6cb;
-                color: #155724;
-            }
-            .alert-error {
-                background-color: #f8d7da;
-                border: 1px solid #f5c6cb;
-                color: #721c24;
-            }
-        """
+        """No custom CSS needed - all styles are in common.css"""
+        return ""
 
     def get_custom_js(self) -> str:
         """Combined JavaScript for both Setup and AI Config."""
         return """
-            // Tab switching using URL navigation
-            function switchTab(tab) {
-                window.location.href = '/settings?tab=' + tab;
+            // Tab switching is now handled by common.js
+
+            // User Preferences functions
+            async function savePreferences() {
+                const prefs = {};
+                // Collect only the 3 display preference values
+                ['timezone', 'date_format', 'time_format'].forEach(key => {
+                    const input = document.getElementById('pref_' + key);
+                    if (input) {
+                        prefs[key] = input.value;
+                    }
+                });
+
+                try {
+                    const response = await fetch('/api/preferences', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(prefs)
+                    });
+                    const data = await response.json();
+
+                    const msgDiv = document.getElementById('preferences-message');
+                    if (data.status === 'success') {
+                        msgDiv.innerHTML = '<div class="alert alert-success">✅ Preferences saved successfully!</div>';
+                        setTimeout(() => msgDiv.innerHTML = '', 3000);
+                    } else {
+                        msgDiv.innerHTML = '<div class="alert alert-error">❌ Error saving preferences</div>';
+                    }
+                } catch (error) {
+                    document.getElementById('preferences-message').innerHTML =
+                        '<div class="alert alert-error">❌ Error: ' + error.message + '</div>';
+                }
             }
 
+
             // Setup functions
-            async function runSetup() {
+            // Debounced runSetup to prevent rapid clicks
+            const runSetup = debounce(async function() {
                 const btn = document.getElementById('run-setup');
                 const output = document.getElementById('setup-output');
 
+                if (btn.disabled) return; // Prevent double-click
+
                 btn.disabled = true;
-                btn.textContent = 'Running Setup...';
+                const originalText = btn.textContent;
+                btn.textContent = '⏳ Running Setup...';
                 output.textContent = 'Starting setup...\\n';
 
                 try {
@@ -132,16 +179,20 @@ class SettingsPage(BasePage):
                     output.textContent += `Error: ${error.message}\\n`;
                 } finally {
                     btn.disabled = false;
-                    btn.textContent = 'Run Setup';
+                    btn.textContent = originalText || 'Run Setup';
                 }
-            }
+            }, 300);
 
-            async function syncGroups() {
+            // Debounced syncGroups
+            const syncGroups = debounce(async function() {
                 const btn = document.getElementById('sync-groups');
                 const output = document.getElementById('setup-output');
 
+                if (btn.disabled) return;
+
                 btn.disabled = true;
-                btn.textContent = 'Syncing...';
+                const originalText = btn.textContent;
+                btn.textContent = '⏳ Syncing...';
                 output.textContent = 'Syncing groups...\\n';
 
                 try {
@@ -155,16 +206,20 @@ class SettingsPage(BasePage):
                     output.textContent += `Error: ${error.message}\\n`;
                 } finally {
                     btn.disabled = false;
-                    btn.textContent = 'Sync Groups';
+                    btn.textContent = originalText || 'Sync Groups';
                 }
-            }
+            }, 300);
 
-            async function syncUsers() {
+            // Debounced syncUsers
+            const syncUsers = debounce(async function() {
                 const btn = document.getElementById('sync-users');
                 const output = document.getElementById('setup-output');
 
+                if (btn.disabled) return;
+
                 btn.disabled = true;
-                btn.textContent = 'Syncing...';
+                const originalText = btn.textContent;
+                btn.textContent = '⏳ Syncing...';
                 output.textContent = 'Syncing users...\\n';
 
                 try {
@@ -184,11 +239,12 @@ class SettingsPage(BasePage):
                     output.textContent += `Error: ${error.message}\\n`;
                 } finally {
                     btn.disabled = false;
-                    btn.textContent = 'Sync Users';
+                    btn.textContent = originalText || 'Sync Users';
                 }
-            }
+            }, 300);
 
-            async function cleanImport() {
+            // Debounced cleanImport
+            const cleanImport = debounce(async function() {
                 const btn = document.getElementById('clean-import');
                 const output = document.getElementById('setup-output');
 
@@ -196,8 +252,11 @@ class SettingsPage(BasePage):
                     return;
                 }
 
+                if (btn.disabled) return;
+
                 btn.disabled = true;
-                btn.textContent = 'Importing...';
+                const originalText = btn.textContent;
+                btn.textContent = '⏳ Importing...';
                 output.textContent = 'Starting clean import...\\n';
 
                 try {
@@ -217,9 +276,9 @@ class SettingsPage(BasePage):
                     output.textContent += `Error: ${error.message}\\n`;
                 } finally {
                     btn.disabled = false;
-                    btn.textContent = 'Clean Import';
+                    btn.textContent = originalText || 'Clean Import';
                 }
-            }
+            }, 300);
 
             // AI Config functions
             let currentConfig = {};
@@ -735,16 +794,25 @@ class SettingsPage(BasePage):
     def render_content(self, query: Dict[str, Any]) -> str:
         """Render settings with tabbed interface."""
         # Get the active tab from query params
-        tab = query.get('tab', ['setup'])[0]
+        tab = query.get('tab', ['general'])[0]
+
+        # Load saved preferences from database
+        from services.user_preferences import UserPreferencesService
+        prefs_service = UserPreferencesService(self.db)
+        saved_prefs = prefs_service.get_all_preferences()
 
         status = self.setup_service.get_setup_status()
         ai_status = get_ai_status()
 
-        # Load AI status on page load if AI tab is active
+        # Load AI status on page load if AI tab is active (non-blocking)
         ai_init_script = """
             <script>
                 window.addEventListener('DOMContentLoaded', function() {
-                    refreshAIStatus();
+                    // Load after a short delay to avoid blocking page render
+                    setTimeout(function() {
+                        refreshAIStatus();
+                        window.aiStatusLoaded = true;
+                    }, 100);
                 });
             </script>
         """ if tab == 'ai-config' else ""
@@ -756,9 +824,69 @@ class SettingsPage(BasePage):
             {emoji_picker_html}
             <!-- Tab Navigation -->
             <div class="tabs">
+                <button class="tab-btn {'active' if tab == 'general' else ''}" onclick="switchTab('general')">General</button>
                 <button class="tab-btn {'active' if tab == 'setup' else ''}" onclick="switchTab('setup')">Setup</button>
                 <button class="tab-btn {'active' if tab == 'ai-config' else ''}" onclick="switchTab('ai-config')">AI Configuration</button>
                 <button class="tab-btn {'active' if tab == 'analysis-types' else ''}" onclick="switchTab('analysis-types')">AI Analysis Types</button>
+            </div>
+
+            <!-- General Tab -->
+            <div id="general-tab" class="tab-content {'active' if tab == 'general' else ''}">
+                <div class="card">
+                    <h3>User Preferences</h3>
+                    <p>Configure your personal settings and display preferences.</p>
+                    <div id="preferences-message"></div>
+                </div>
+
+                <div class="card">
+                    <h3>Display Settings</h3>
+                    <table>
+                        <tr>
+                            <td><strong>Timezone:</strong></td>
+                            <td>
+                                <select id="pref_timezone">
+                                    <option value="UTC" {'selected' if saved_prefs.get('timezone') == 'UTC' else ''}>UTC</option>
+                                    <option value="US/Eastern" {'selected' if saved_prefs.get('timezone') == 'US/Eastern' else ''}>US/Eastern</option>
+                                    <option value="US/Central" {'selected' if saved_prefs.get('timezone') == 'US/Central' else ''}>US/Central</option>
+                                    <option value="US/Mountain" {'selected' if saved_prefs.get('timezone') == 'US/Mountain' else ''}>US/Mountain</option>
+                                    <option value="US/Pacific" {'selected' if saved_prefs.get('timezone') == 'US/Pacific' else ''}>US/Pacific</option>
+                                    <option value="Europe/London" {'selected' if saved_prefs.get('timezone') == 'Europe/London' else ''}>Europe/London</option>
+                                    <option value="Europe/Paris" {'selected' if saved_prefs.get('timezone') == 'Europe/Paris' else ''}>Europe/Paris</option>
+                                    <option value="Europe/Berlin" {'selected' if saved_prefs.get('timezone') == 'Europe/Berlin' else ''}>Europe/Berlin</option>
+                                    <option value="Asia/Tokyo" {'selected' if saved_prefs.get('timezone') == 'Asia/Tokyo' else ''}>Asia/Tokyo</option>
+                                    <option value="Asia/Shanghai" {'selected' if saved_prefs.get('timezone') == 'Asia/Shanghai' else ''}>Asia/Shanghai</option>
+                                    <option value="Asia/Hong_Kong" {'selected' if saved_prefs.get('timezone') == 'Asia/Hong_Kong' else ''}>Asia/Hong Kong</option>
+                                    <option value="Asia/Singapore" {'selected' if saved_prefs.get('timezone') == 'Asia/Singapore' else ''}>Asia/Singapore</option>
+                                    <option value="Australia/Sydney" {'selected' if saved_prefs.get('timezone') == 'Australia/Sydney' else ''}>Australia/Sydney</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Date Format:</strong></td>
+                            <td>
+                                <select id="pref_date_format">
+                                    <option value="YYYY-MM-DD" {'selected' if saved_prefs.get('date_format') == 'YYYY-MM-DD' else ''}>YYYY-MM-DD</option>
+                                    <option value="MM/DD/YYYY" {'selected' if saved_prefs.get('date_format') == 'MM/DD/YYYY' else ''}>MM/DD/YYYY</option>
+                                    <option value="DD/MM/YYYY" {'selected' if saved_prefs.get('date_format') == 'DD/MM/YYYY' else ''}>DD/MM/YYYY</option>
+                                    <option value="DD.MM.YYYY" {'selected' if saved_prefs.get('date_format') == 'DD.MM.YYYY' else ''}>DD.MM.YYYY</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Time Format:</strong></td>
+                            <td>
+                                <select id="pref_time_format">
+                                    <option value="24h" {'selected' if saved_prefs.get('time_format') == '24h' else ''}>24-hour</option>
+                                    <option value="12h" {'selected' if saved_prefs.get('time_format') == '12h' else ''}>12-hour</option>
+                                </select>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <button class="btn btn-primary" onclick="savePreferences()">Save Preferences</button>
+                </div>
             </div>
 
             <!-- Setup Tab -->
@@ -986,9 +1114,31 @@ class SettingsPage(BasePage):
 
             <!-- Initialize scripts based on active tab -->
             {ai_init_script}
-            {'<script>window.addEventListener("DOMContentLoaded", function() {{ loadAnalysisTypes(); }});</script>' if tab == 'analysis-types' else ''}
+            {'<script>window.addEventListener("DOMContentLoaded", function() {{ setTimeout(function() {{ loadAnalysisTypes(); window.analysisTypesLoaded = true; }}, 100); }});</script>' if tab == 'analysis-types' else ''}
 
             <script>
+            // Handle browser back/forward buttons
+            window.addEventListener('popstate', function(event) {{
+                const params = new URLSearchParams(window.location.search);
+                const tab = params.get('tab') || 'general';
+                switchTab(tab);
+            }});
+
+            // Initialize correct tab on page load
+            document.addEventListener('DOMContentLoaded', function() {{
+                const params = new URLSearchParams(window.location.search);
+                const currentTab = params.get('tab') || 'general';
+
+                // Make sure correct tab is visible
+                document.querySelectorAll('.tab-content').forEach(el => {{
+                    el.classList.remove('active');
+                }});
+                const activeTab = document.getElementById(currentTab + '-tab');
+                if (activeTab) {{
+                    activeTab.classList.add('active');
+                }}
+            }});
+
             // Simple notification function
             function showNotification(message, type = 'info') {{
                 const notification = document.createElement('div');

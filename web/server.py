@@ -28,6 +28,7 @@ from models.database import DatabaseManager
 from services.setup import SetupService
 # Sentiment and summarization now integrated into AI analysis service
 from services.ai_analysis import AIAnalysisService
+from services.user_preferences import UserPreferencesService
 
 # Import modular page components
 from .pages.dashboard import ComprehensiveDashboard
@@ -390,6 +391,15 @@ class ModularWebServer:
                     self._handle_ai_analysis_run(query)
                 elif path.startswith('/api/ai-analysis/status'):
                     self._handle_ai_analysis_status(query)
+                elif path == '/api/preferences':
+                    prefs_service = UserPreferencesService(web_server.db)
+                    preferences = prefs_service.get_all_preferences()
+                    self._send_json_response(preferences)
+                elif path == '/api/dashboard/comprehensive':
+                    # Handle dashboard comprehensive API endpoint
+                    user_timezone = query.get('timezone', ['Asia/Tokyo'])[0]
+                    dashboard_data = web_server.pages['dashboard'].get_dashboard_data(user_timezone)
+                    self._send_json_response(dashboard_data)
                 else:
                     self._send_error_response(404, "API endpoint not found")
 
@@ -398,7 +408,15 @@ class ModularWebServer:
                 try:
                     data = json.loads(post_data) if post_data else {}
 
-                    if path == '/api/save-user-reactions':
+                    if path == '/api/preferences':
+                        prefs_service = UserPreferencesService(web_server.db)
+                        prefs_service.set_multiple_preferences(data)
+                        self._send_json_response({'status': 'success'})
+                    elif path == '/api/preferences/reset':
+                        prefs_service = UserPreferencesService(web_server.db)
+                        prefs_service.reset_to_defaults()
+                        self._send_json_response({'status': 'success'})
+                    elif path == '/api/save-user-reactions':
                         user_id = data.get('user_id')
                         emojis = data.get('emojis', [])
                         mode = data.get('mode', 'random')

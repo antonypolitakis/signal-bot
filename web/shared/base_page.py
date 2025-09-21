@@ -72,11 +72,13 @@ class BasePage(ABC):
         return parse_qs(query_string) if query_string else {}
 
     def get_user_timezone(self, query: Dict[str, Any]) -> Optional[str]:
-        """Get user timezone from query parameters."""
-        timezone = query.get('timezone', [None])[0]
-        if timezone:
-            return timezone
-        return 'Asia/Tokyo'  # Default to Asia/Tokyo
+        """Get user timezone from database preferences."""
+        # Import here to avoid circular dependency
+        from services.user_preferences import UserPreferencesService
+
+        # Get from database preferences
+        prefs_service = UserPreferencesService(self.db)
+        return prefs_service.get_timezone()
 
     def format_user_display(self, user) -> str:
         """Format user display name consistently - prioritize real friendly names, then phone, then UUID."""
@@ -107,27 +109,69 @@ class BasePage(ABC):
         """Get standardized date selector."""
         return get_standard_date_selector(input_id=input_id, **kwargs)
 
-    def format_timestamp(self, timestamp_ms: Optional[int], user_timezone: Optional[str] = None) -> str:
-        """Format timestamp for display using user timezone."""
+    def format_timestamp(self, timestamp_ms: Optional[int], user_timezone: Optional[str] = None, include_time: bool = True) -> str:
+        """Format timestamp for display using user timezone and preferences."""
         if not timestamp_ms:
             return "Unknown time"
 
         try:
             from datetime import datetime, timezone
             import pytz
+            from services.user_preferences import UserPreferencesService
+
+            # Get user preferences
+            prefs_service = UserPreferencesService(self.db)
 
             # Convert milliseconds to datetime
             dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
 
             # Convert to user timezone
-            if user_timezone:
-                try:
-                    user_tz = pytz.timezone(user_timezone)
-                    dt = dt.astimezone(user_tz)
-                except Exception:
-                    pass  # Fall back to UTC if timezone is invalid
+            if not user_timezone:
+                user_timezone = prefs_service.get_timezone()
 
-            # Format as readable string
-            return dt.strftime('%Y-%m-%d %H:%M:%S')
+            try:
+                user_tz = pytz.timezone(user_timezone)
+                dt = dt.astimezone(user_tz)
+            except Exception:
+                pass  # Fall back to UTC if timezone is invalid
+
+            # Format using user preferences
+            return prefs_service.format_date(dt, include_time=include_time)
         except Exception:
             return "Unknown time"
+
+    def get_today_in_user_timezone(self) -> tuple:
+        """Get today's date range in user's timezone.
+        Returns (start_of_day_ms, end_of_day_ms, iso_date_string, formatted_date_string)
+        """
+        from datetime import datetime
+        import pytz
+        from services.user_preferences import UserPreferencesService
+
+        prefs_service = UserPreferencesService(self.db)
+        user_timezone = prefs_service.get_timezone()
+
+        try:
+            tz = pytz.timezone(user_timezone)
+            now = datetime.now(tz)
+            start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_of_today = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+            start_ms = int(start_of_today.timestamp() * 1000)
+            end_ms = int(end_of_today.timestamp() * 1000)
+            iso_date_string = now.strftime('%Y-%m-%d')  # Always ISO for database
+            formatted_date_string = prefs_service.format_date(now, include_time=False)  # User preference for display
+
+            return (start_ms, end_ms, iso_date_string, formatted_date_string)
+        except Exception:
+            # Fallback to UTC
+            now = datetime.utcnow()
+            start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_of_today = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+            start_ms = int(start_of_today.timestamp() * 1000)
+            end_ms = int(end_of_today.timestamp() * 1000)
+            iso_date_string = now.strftime('%Y-%m-%d')
+            formatted_date_string = iso_date_string  # Fallback uses ISO for both
+
+            return (start_ms, end_ms, iso_date_string, formatted_date_string)

@@ -1,5 +1,64 @@
 """
-AI Configuration page for Signal Bot web interface.
+AI Configuration Page for Signal Bot Web Interface
+
+PURPOSE:
+    Dedicated interface for configuring and managing AI providers (Ollama and Gemini)
+    that power the bot's intelligent analysis and response capabilities.
+
+FUNCTIONALITY:
+    1. Ollama Configuration (Local AI):
+       - Configure local Ollama server URL
+       - Test server connectivity
+       - Select and manage AI models
+       - View model details (size, context window, quantization)
+       - Preload models into memory
+       - Monitor VRAM usage and model status
+
+    2. Gemini Configuration (External AI):
+       - Configure Gemini CLI command path
+       - Enable/disable Gemini provider
+       - Fallback option when Ollama unavailable
+
+    3. Provider Management:
+       - Switch between AI providers
+       - View active provider status
+       - Monitor response times and availability
+       - Display loaded models and memory usage
+
+    4. Model Operations:
+       - List available models from Ollama server
+       - Preload selected models for faster response
+       - View detailed model specifications
+       - Automatic model selection based on availability
+
+PAGE STRUCTURE:
+    - Provider configuration sections (Ollama/Gemini)
+    - Real-time connection testing interface
+    - Model selection dropdown with details
+    - Status dashboard showing provider health
+    - Action buttons for save/preload/refresh
+
+TESTING:
+    1. Navigate to /ai-config or access via Settings > AI Configuration tab
+    2. Test Ollama server connection with various URLs
+    3. Verify model list population from Ollama server
+    4. Test model preloading functionality
+    5. Verify provider switching between Ollama and Gemini
+    6. Check status updates reflect actual provider state
+    7. Test error handling for invalid server URLs
+    8. Verify configuration persistence after save
+
+API ENDPOINTS USED:
+    - GET /api/ai-status - Get current AI provider status
+    - GET /api/ai-config - Load saved AI configuration
+    - POST /api/ai-config - Save AI configuration
+    - GET /api/ollama-models?host={url} - List available Ollama models
+    - POST /api/ollama-preload - Preload selected model
+
+DATABASE INTERACTIONS:
+    - Reads/writes ai_config table for provider settings
+    - Stores selected model preferences
+    - Caches provider status for performance
 """
 
 from typing import Dict, Any
@@ -22,7 +81,7 @@ class AIConfigPage(BasePage):
     def get_custom_js(self) -> str:
         return """
                 function loadConfig() {
-                    fetch('/api/ai-config')
+                    fetchWithTimeout('/api/ai-config', {}, 10000)
                         .then(response => response.json())
                         .then(data => {
                             document.getElementById('provider').value = data.provider || '';
@@ -38,14 +97,13 @@ class AIConfigPage(BasePage):
                         })
                         .catch(error => {
                             console.error('Error loading AI config:', error);
+                            showMessage('Error loading configuration', 'error');
                         });
                 }
 
-                function saveConfig() {
+                const saveConfig = debounce(function() {
                     const btn = document.getElementById('save-btn');
-                    const originalText = btn.textContent;
-                    btn.disabled = true;
-                    btn.textContent = 'Saving...';
+                    setButtonLoading(btn, true, '⏳ Saving...');
 
                     const config = {
                         provider: document.getElementById('provider').value,
@@ -59,11 +117,11 @@ class AIConfigPage(BasePage):
                         auto_reactions_enabled: document.getElementById('auto-reactions').checked
                     };
 
-                    fetch('/api/ai-config', {
+                    fetchWithTimeout('/api/ai-config', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify(config)
-                    })
+                    }, 15000)
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
@@ -76,18 +134,16 @@ class AIConfigPage(BasePage):
                         showMessage('Error saving configuration: ' + error.message, 'error');
                     })
                     .finally(() => {
-                        btn.disabled = false;
-                        btn.textContent = originalText;
+                        setButtonLoading(btn, false);
                     });
+                }, 300);
                 }
 
-                function testConnection() {
+                const testConnection = debounce(function() {
                     const btn = document.getElementById('test-btn');
-                    const originalText = btn.textContent;
-                    btn.disabled = true;
-                    btn.textContent = 'Testing...';
+                    setButtonLoading(btn, true, '⏳ Testing...');
 
-                    fetch('/api/ai-config/test', {method: 'POST'})
+                    fetchWithTimeout('/api/ai-config/test', {method: 'POST'}, 20000)
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
@@ -100,9 +156,9 @@ class AIConfigPage(BasePage):
                             showMessage('Connection test failed: ' + error.message, 'error');
                         })
                         .finally(() => {
-                            btn.disabled = false;
-                            btn.textContent = originalText;
+                            setButtonLoading(btn, false);
                         });
+                }, 300);
                 }
 
                 function showMessage(message, type) {

@@ -1,5 +1,51 @@
 """
-Groups page for Signal Bot web interface.
+Groups Management Page for Signal Bot Web Interface
+
+PURPOSE:
+    Manages Signal group configurations and monitoring settings for the bot system.
+    Controls which groups the bot monitors and processes messages from.
+
+FUNCTIONALITY:
+    1. Group Monitoring:
+       - Display monitored and unmonitored Signal groups
+       - Toggle group monitoring status
+       - Show group member information and counts
+
+    2. Group Statistics:
+       - Display message counts per group
+       - Show member lists with UUID and phone numbers
+       - Track group activity levels
+
+    3. Group Actions:
+       - Enable/disable monitoring for specific groups
+       - View group messages (redirects to messages page)
+       - Refresh group member lists from Signal
+
+PAGE STRUCTURE:
+    - Tab interface (Monitored Groups / Unmonitored Groups)
+    - Group cards/tables with monitoring controls
+    - Member details expandable sections
+    - Quick action buttons for group management
+
+TESTING:
+    1. Navigate to /groups endpoint
+    2. Verify all groups display correctly
+    3. Test monitoring/unmonitoring group toggle
+    4. Verify member lists show correct UUID and phone information
+    5. Test "View Messages" link navigation
+    6. Check tab switching functionality
+    7. Verify group counts and statistics accuracy
+
+API ENDPOINTS USED:
+    - POST /api/groups/monitor - Enable group monitoring
+    - POST /api/groups/unmonitor - Disable group monitoring
+    - GET /api/groups/refresh - Refresh group member lists
+
+DATABASE INTERACTIONS:
+    - Reads from groups table for group configurations
+    - Updates groups.is_monitored field for monitoring status
+    - Joins with messages table for statistics
+    - Reads group_members for member information
 """
 
 from typing import Dict, Any
@@ -25,31 +71,33 @@ class GroupsPage(BasePage):
 
     def get_custom_js(self) -> str:
         return """
-            function switchTab(tab) {
-                // Navigate to the tab URL like Messages page does
-                window.location.href = '/groups?tab=' + tab;
-            }
+            // Tab switching is now handled by common.js
 
-            async function toggleGroupMonitoring(groupId, monitor) {
+            const toggleGroupMonitoring = debounce(async function(groupId, monitor) {
+                const btn = event.target;
+                setButtonLoading(btn, true, '⏳ Updating...');
+
                 try {
                     const payload = {group_id: groupId, is_monitored: monitor};
 
-                    const response = await fetch('/api/groups/monitor', {
+                    const response = await fetchWithTimeout('/api/groups/monitor', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify(payload)
-                    });
+                    }, 10000);
 
                     if (response.ok) {
                         location.reload();
                     } else {
                         const errorText = await response.text();
-                        alert('Failed to update group monitoring: ' + errorText);
+                        showNotification('Failed to update group monitoring: ' + errorText, 'error');
+                        setButtonLoading(btn, false);
                     }
                 } catch (error) {
-                    alert('Error: ' + error.message);
+                    showNotification('Error: ' + error.message, 'error');
+                    setButtonLoading(btn, false);
                 }
-            }
+            }, 300);
         """
 
     def render_content(self, query: Dict[str, Any]) -> str:

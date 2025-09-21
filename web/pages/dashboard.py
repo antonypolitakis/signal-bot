@@ -33,46 +33,12 @@ class ComprehensiveDashboard(BasePage):
     def get_custom_css(self) -> str:
         """Dashboard-specific CSS for grid and charts."""
         return """
+        /* Dashboard-specific layouts */
         .dashboard-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 20px;
             margin: 20px 0;
-        }
-
-        .status-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-
-        .status-online { background: #4CAF50; }
-        .status-offline { background: #f44336; }
-        .status-warning { background: #FF9800; }
-
-        .metric {
-            display: flex;
-            justify-content: space-between;
-            margin: 10px 0;
-            padding: 8px 0;
-            border-bottom: 1px solid #f5f5f5;
-        }
-
-        .metric-label {
-            color: #666;
-            font-size: 0.9em;
-        }
-
-        .metric-value {
-            font-weight: bold;
-            color: #333;
-        }
-
-        .metric-value.large {
-            font-size: 1.8em;
-            color: #2196F3;
         }
 
         .quick-stats {
@@ -82,98 +48,15 @@ class ComprehensiveDashboard(BasePage):
             margin: 20px 0;
         }
 
-        .stat-box {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            color: #333;
-            padding: 20px;
-            border-radius: 8px;
-            text-align: center;
-            transition: transform 0.2s;
-        }
-
-        .stat-box:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-
-        .stat-value {
-            font-size: 2.5em;
-            font-weight: bold;
-            margin-bottom: 5px;
-            display: block;
-        }
-
-        .stat-label {
-            font-size: 0.9em;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            opacity: 0.8;
-        }
-
-        .activity-list {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .activity-item {
-            padding: 10px;
-            border-left: 3px solid #2196F3;
-            margin: 10px 0;
-            background: #f9f9f9;
-        }
-
-        .activity-time {
-            font-size: 0.8em;
-            color: #999;
-        }
-
         .chart-container {
             height: 200px;
             margin: 15px 0;
         }
 
-        .action-button {
-            background: #2196F3;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 5px;
-            transition: background 0.3s;
-        }
-
-        .action-button:hover {
-            background: #1976D2;
-        }
-
-        .action-button.danger {
-            background: #f44336;
-        }
-
-        .alert-banner {
-            background: #FFF3E0;
-            border-left: 4px solid #FF9800;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 4px;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #f0f0f0;
-            border-radius: 4px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: #4CAF50;
-            transition: width 0.3s;
-        }
+        /* Keep dashboard-specific color overrides for status indicators */
+        .dashboard-grid .status-online { background: #4CAF50; }
+        .dashboard-grid .status-offline { background: #f44336; }
+        .dashboard-grid .status-warning { background: #FF9800; }
         """
 
     def get_custom_js(self) -> str:
@@ -193,7 +76,7 @@ class ComprehensiveDashboard(BasePage):
             const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tokyo';
 
             // Fetch all dashboard data with timezone
-            fetch(`/api/dashboard/comprehensive?timezone=${encodeURIComponent(timezone)}`)
+            fetchWithTimeout(`/api/dashboard/comprehensive?timezone=${encodeURIComponent(timezone)}`, {}, 15000)
                 .then(response => response.json())
                 .then(data => {
                     updateSystemStatus(data.system);
@@ -205,6 +88,7 @@ class ComprehensiveDashboard(BasePage):
                 })
                 .catch(error => {
                     console.error('Dashboard update failed:', error);
+                    showNotification('Error', 'Failed to load dashboard data');
                 });
         }
 
@@ -286,30 +170,28 @@ class ComprehensiveDashboard(BasePage):
             }
         }
 
-        // Quick action functions
-        function syncUsers() {
-            executeAction('/api/users/sync', 'Syncing users...');
-        }
+        // Quick action functions with debouncing
+        const syncUsers = debounce(function() {
+            executeAction('/api/users/sync', '⏳ Syncing users...');
+        }, 300);
 
-        function syncGroups() {
-            executeAction('/api/groups/sync', 'Syncing groups...');
-        }
+        const syncGroups = debounce(function() {
+            executeAction('/api/groups/sync', '⏳ Syncing groups...');
+        }, 300);
 
-        function runBackup() {
-            executeAction('/api/backup/quick', 'Creating backup...');
-        }
+        const runBackup = debounce(function() {
+            executeAction('/api/backup/quick', '⏳ Creating backup...');
+        }, 300);
 
-        function clearCache() {
-            executeAction('/api/cache/clear', 'Clearing cache...');
-        }
+        const clearCache = debounce(function() {
+            executeAction('/api/cache/clear', '⏳ Clearing cache...');
+        }, 300);
 
         function executeAction(url, message) {
             const btn = event.target;
-            const originalText = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = message;
+            setButtonLoading(btn, true, message);
 
-            fetch(url, { method: 'POST' })
+            fetchWithTimeout(url, { method: 'POST' }, 30000)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -320,11 +202,10 @@ class ComprehensiveDashboard(BasePage):
                     }
                 })
                 .catch(error => {
-                    showNotification('Error', 'Request failed: ' + error);
+                    showNotification('Error', 'Request failed: ' + error.message);
                 })
                 .finally(() => {
-                    btn.disabled = false;
-                    btn.textContent = originalText;
+                    setButtonLoading(btn, false);
                 });
         }
 
@@ -709,23 +590,11 @@ class ComprehensiveDashboard(BasePage):
                 cursor.execute("SELECT COUNT(*) FROM messages")
                 stats['total_messages'] = cursor.fetchone()[0]
 
-                # Messages today - with timezone support
-                # Get the start of today in the user's timezone
-                import pytz
-                from datetime import datetime
-
-                try:
-                    tz = pytz.timezone(user_timezone)
-                    now_tz = datetime.now(tz)
-                    start_of_today = now_tz.replace(hour=0, minute=0, second=0, microsecond=0)
-                    start_timestamp_ms = int(start_of_today.timestamp() * 1000)
-
-                    cursor.execute("SELECT COUNT(*) FROM messages WHERE timestamp >= ?", (start_timestamp_ms,))
-                    stats['messages_today'] = cursor.fetchone()[0]
-                except Exception:
-                    # Fallback to UTC if timezone fails
-                    cursor.execute("SELECT COUNT(*) FROM messages WHERE date(timestamp/1000, 'unixepoch') = date('now')")
-                    stats['messages_today'] = cursor.fetchone()[0]
+                # Messages today - using shared method for consistency
+                # This ensures we use the same timezone calculation everywhere
+                start_of_today_ms, _, _, _ = self.get_today_in_user_timezone()
+                cursor.execute("SELECT COUNT(*) FROM messages WHERE timestamp >= ?", (start_of_today_ms,))
+                stats['messages_today'] = cursor.fetchone()[0]
 
                 # Messages last 24h (timestamps are in milliseconds)
                 cursor.execute("SELECT COUNT(*) FROM messages WHERE timestamp > (strftime('%s', 'now') - 86400) * 1000")
@@ -873,15 +742,6 @@ class ComprehensiveDashboard(BasePage):
         try:
             with self.db._get_connection() as conn:
                 cursor = conn.cursor()
-
-                # Check for old messages
-                cursor.execute("SELECT COUNT(*) FROM messages WHERE timestamp < datetime('now', '-180 days')")
-                old_messages = cursor.fetchone()[0]
-                if old_messages > 100:
-                    alerts.append({
-                        'title': 'Archive Recommended',
-                        'message': f'{old_messages} messages are older than 6 months. Consider archiving.'
-                    })
 
                 # Check database size
                 db_path = Path(self.db.db_path)

@@ -1,0 +1,109 @@
+{
+  "groups": [
+    {
+      "id": "TEST_GROUP_1",
+      "name": "Test Group Alpha",
+      "monitored": true
+    },
+    {
+      "id": "TEST_GROUP_2",
+      "name": "Test Group Beta",
+      "monitored": true
+    },
+    {
+      "id": "TEST_GROUP_3",
+      "name": "Test Group Gamma",
+      "monitored": false
+    }
+  ],
+  "users": [
+    {
+      "uuid": "f478dcce-69fe-4cd1-880c-fad41af6680d",
+      "phone": "+1111111111",
+      "name": "Test User 1"
+    },
+    {
+      "uuid": "818efb39-e0d5-4062-b6e8-44d2b7793947",
+      "phone": "+2222222222",
+      "name": "Test User 2"
+    },
+    {
+      "uuid": "84925a14-ad3b-451e-9667-01a9755e3eab",
+      "phone": "+3333333333",
+      "name": "Test User 3"
+    }
+  ],
+  "total_messages": 93,
+  "scenarios": [
+    {
+      "id": 1000,
+      "date": "today",
+      "group": "TEST_GROUP_1",
+      "sender": "f478dcce-69fe-4cd1-880c-fad41af6680d",
+      "has_attachment": false
+    },
+    {
+      "id": 1001,
+      "date": "today",
+      "group": "TEST_GROUP_2",
+      "sender": "f478dcce-69fe-4cd1-880c-fad41af6680d",
+      "has_attachment": false
+    },
+    {
+      "id": 1002,
+      "date": "today",
+      "group": "TEST_GROUP_1",
+      "sender": "818efb39-e0d5-4062-b6e8-44d2b7793947",
+      "has_attachment": false
+    },
+    {
+      "id": 1003,
+      "date": "today",
+      "group": "TEST_GROUP_2",
+      "sender": "818efb39-e0d5-4062-b6e8-44d2b7793947",
+      "has_attachment": false
+    },
+    {
+      "id": 1004,
+      "date": "today",
+      "group": "TEST_GROUP_1",
+      "sender": "84925a14-ad3b-451e-9667-01a9755e3eab",
+      "has_attachment": false
+    },
+    {
+      "id": 1005,
+      "date": "today",
+      "group": "TEST_GROUP_2",
+      "sender": "84925a14-ad3b-451e-9667-01a9755e3eab",
+      "has_attachment": false
+    },
+    {
+      "id": 1006,
+      "date": "today",
+      "group": "TEST_GROUP_1",
+      "sender": "f478dcce-69fe-4cd1-880c-fad41af6680d",
+      "has_attachment": false
+    },
+    {
+      "id": 1007,
+      "date": "today",
+      "group": "TEST_GROUP_2",
+      "sender": "f478dcce-69fe-4cd1-880c-fad41af6680d",
+      "has_attachment": false
+    },
+    {
+      "id": 1008,
+      "date": "today",
+      "group": "TEST_GROUP_1",
+      "sender": "818efb39-e0d5-4062-b6e8-44d2b7793947",
+      "has_attachment": false
+    },
+    {
+      "id": 1009,
+      "date": "today",
+      "group": "TEST_GROUP_2",
+      "sender": "818efb39-e0d5-4062-b6e8-44d2b7793947",
+      "has_attachment": false
+    }
+  ]
+}

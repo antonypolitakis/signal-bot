@@ -1,7 +1,51 @@
 """
-Users page for Signal Bot web interface.
+Users Management Page for Signal Bot Web Interface
 
-Manages user emoji reaction configurations.
+PURPOSE:
+    Provides a comprehensive interface for managing user configurations, emoji reactions,
+    and user-specific settings within the Signal Bot system.
+
+FUNCTIONALITY:
+    1. User Management:
+       - Display configured users with custom emoji reactions
+       - Show discovered users from Signal groups
+       - Allow adding/editing/removing user configurations
+
+    2. Emoji Reaction System:
+       - Configure custom emoji reactions per user
+       - Support for random emoji selection mode
+       - Interactive emoji picker interface
+       - Real-time emoji preview and selection
+
+    3. User Statistics:
+       - Display message counts per user
+       - Show group memberships
+       - Track user activity metrics
+
+PAGE STRUCTURE:
+    - Tab-based interface (Configured Users / Discovered Users)
+    - User table with sorting and filtering capabilities
+    - Modal dialogs for user configuration
+    - Emoji picker component for reaction selection
+
+TESTING:
+    1. Navigate to /users endpoint
+    2. Verify configured users display with correct emoji reactions
+    3. Test adding new user configuration through discovered users
+    4. Test editing existing user emoji reactions
+    5. Test removing user configurations
+    6. Verify emoji picker functionality and selection persistence
+    7. Check tab switching between configured and discovered users
+
+API ENDPOINTS USED:
+    - GET /api/user-reactions?user_id={id} - Get user reaction configuration
+    - POST /api/users/update - Update user emoji reactions
+    - POST /api/users/remove - Remove user configuration
+
+DATABASE INTERACTIONS:
+    - Reads from users table for configured users
+    - Reads from messages table for user statistics
+    - Updates emoji_reactions table for reaction configurations
 """
 
 from typing import Dict, Any
@@ -31,57 +75,62 @@ class UsersPage(BasePage):
     def get_custom_js(self) -> str:
         """JavaScript for user management functionality."""
         return """
-            function switchTab(tab) {
-                // Navigate to the tab URL like Messages page does
-                window.location.href = '/users?tab=' + tab;
-            }
+            // Tab switching is now handled by common.js
 
-            function saveReactions(userId) {
+            const saveReactions = debounce(function(userId) {
+                const btn = event.target;
+                setButtonLoading(btn, true, '⏳ Saving...');
+
                 const selectedEmojis = Array.from(document.querySelectorAll('#emoji-' + userId + ' .emoji-item.selected'))
                     .map(item => item.dataset.emoji);
                 const mode = document.getElementById('mode-' + userId).value;
 
-                fetch('/api/save-user-reactions', {
+                fetchWithTimeout('/api/save-user-reactions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: userId, emojis: selectedEmojis, mode: mode })
-                })
+                }, 10000)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        alert('Reactions saved successfully!');
-                        location.reload();
+                        showNotification('Reactions saved successfully!', 'success');
+                        setTimeout(() => location.reload(), 1500);
                     } else {
-                        alert('Error saving reactions');
+                        showNotification('Error saving reactions', 'error');
                     }
-                });
-            }
+                })
+                .finally(() => setButtonLoading(btn, false));
+            }, 300);
 
-            function removeReactions(userId) {
-                if (confirm('Remove all emoji reactions for this user?')) {
-                    fetch('/api/remove-user-reactions', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ user_id: userId })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert('Reactions removed successfully!');
-                            location.reload();
-                        } else {
-                            alert('Error removing reactions');
-                        }
-                    });
-                }
-            }
+            const removeReactions = debounce(function(userId, event) {
+                if (!confirm('Remove all emoji reactions for this user?')) return;
+
+                const btn = event ? event.target : document.querySelector(`button[onclick*="removeReactions('${userId}')"]`);
+                setButtonLoading(btn, true, '⏳ Removing...');
+
+                fetchWithTimeout('/api/remove-user-reactions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId })
+                }, 10000)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('Reactions removed successfully!', 'success');
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        showNotification('Error removing reactions', 'error');
+                    }
+                })
+                .finally(() => setButtonLoading(btn, false));
+            }, 300);
 
             function toggleEmoji(element) {
                 element.classList.toggle('selected');
             }
 
             function openEmojiPicker(userId) {
-                fetch('/api/user-reactions?user_id=' + userId)
+                fetchWithTimeout('/api/user-reactions?user_id=' + userId, {}, 10000)
                     .then(response => response.json())
                     .then(data => {
                         document.getElementById('selectedEmojis').innerHTML = '';
@@ -115,28 +164,35 @@ class UsersPage(BasePage):
                 selectedDiv.appendChild(span);
             }
 
-            function saveFromModal() {
+            const saveFromModal = debounce(function(event) {
                 const userId = document.getElementById('currentUserId').value;
                 const emojis = Array.from(document.querySelectorAll('#selectedEmojis .emoji-badge'))
                     .map(span => span.textContent);
                 const mode = document.getElementById('reactionMode').value;
+                const btn = event ? event.target : document.querySelector('button[onclick*="saveFromModal"]');
+                setButtonLoading(btn, true, '⏳ Saving...');
 
-                fetch('/api/save-user-reactions', {
+                fetchWithTimeout('/api/save-user-reactions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: userId, emojis: emojis, mode: mode })
-                })
+                }, 10000)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        alert('Reactions saved successfully!');
-                        location.reload();
+                        showNotification('Reactions saved successfully!', 'success');
+                        closeEmojiPicker();
+                        setTimeout(() => location.reload(), 1500);
                     } else {
-                        alert('Error saving reactions');
+                        showNotification('Error saving reactions', 'error');
+                        setButtonLoading(btn, false);
                     }
+                })
+                .catch(error => {
+                    showNotification('Error: ' + error.message, 'error');
+                    setButtonLoading(btn, false);
                 });
-                closeEmojiPicker();
-            }
+            }, 300);
         """
 
     def render_content(self, query: Dict[str, Any]) -> str:
@@ -265,7 +321,7 @@ class UsersPage(BasePage):
         if is_configured:
             actions = f"""
                 <button class="btn" onclick="openEmojiPicker('{user.uuid}')">Edit</button>
-                <button class="btn btn-danger" onclick="removeReactions('{user.uuid}')">Remove</button>
+                <button class="btn btn-danger" onclick="removeReactions('{user.uuid}', event)">Remove</button>
             """
         else:
             actions = f"""

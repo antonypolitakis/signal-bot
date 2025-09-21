@@ -25,12 +25,11 @@ class SetupPage(BasePage):
                     const btn = document.getElementById('run-setup');
                     const output = document.getElementById('setup-output');
 
-                    btn.disabled = true;
-                    btn.textContent = 'Running Setup...';
+                    setButtonLoading(btn, true, '⏳ Running Setup...');
                     output.textContent = 'Starting setup...\\n';
 
                     try {
-                        const response = await fetch('/api/setup/run');
+                        const response = await fetchWithTimeout('/api/setup/run', {}, 60000);
                         const result = await response.json();
 
                         output.textContent += `Setup completed:\\n`;
@@ -64,8 +63,7 @@ class SetupPage(BasePage):
                     } catch (error) {
                         output.textContent += `Error: ${error.message}\\n`;
                     } finally {
-                        btn.disabled = false;
-                        btn.textContent = 'Run Setup';
+                        setButtonLoading(btn, false);
                     }
                 }
 
@@ -73,12 +71,11 @@ class SetupPage(BasePage):
                     const btn = document.getElementById('sync-groups');
                     const output = document.getElementById('setup-output');
 
-                    btn.disabled = true;
-                    btn.textContent = 'Syncing...';
+                    setButtonLoading(btn, true, '⏳ Syncing...');
                     output.textContent = 'Syncing groups...\\n';
 
                     try {
-                        const response = await fetch('/api/setup/sync', { method: 'POST' });
+                        const response = await fetchWithTimeout('/api/setup/sync', { method: 'POST' }, 30000);
                         const result = await response.json();
 
                         output.textContent += `Groups synced: ${result.synced_count}\\n`;
@@ -87,8 +84,7 @@ class SetupPage(BasePage):
                     } catch (error) {
                         output.textContent += `Error: ${error.message}\\n`;
                     } finally {
-                        btn.disabled = false;
-                        btn.textContent = 'Sync Groups';
+                        setButtonLoading(btn, false);
                     }
                 }
 
@@ -100,12 +96,11 @@ class SetupPage(BasePage):
                         return;
                     }
 
-                    btn.disabled = true;
-                    btn.textContent = 'Importing...';
+                    setButtonLoading(btn, true, '⏳ Importing...');
                     output.textContent = 'Starting clean import...\\n';
 
                     try {
-                        const response = await fetch('/api/setup/clean-import', { method: 'POST' });
+                        const response = await fetchWithTimeout('/api/setup/clean-import', { method: 'POST' }, 60000);
                         const result = await response.json();
 
                         if (result.success) {
@@ -123,8 +118,7 @@ class SetupPage(BasePage):
                     } catch (error) {
                         output.textContent += `Error: ${error.message}\\n`;
                     } finally {
-                        btn.disabled = false;
-                        btn.textContent = 'Clean Import Contacts & Groups';
+                        setButtonLoading(btn, false);
                     }
                 }
         """

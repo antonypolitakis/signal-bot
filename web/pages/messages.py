@@ -1,5 +1,63 @@
 """
-Messages page for Signal Bot web interface.
+Messages Page for Signal Bot Web Interface
+
+PURPOSE:
+    Central hub for viewing, filtering, and analyzing all messages from monitored Signal groups.
+    Provides comprehensive message management and AI-powered analysis capabilities.
+
+FUNCTIONALITY:
+    1. Message Display:
+       - View messages by group, sender, or all combined
+       - Real-time message filtering and search
+       - Attachment preview and download support
+       - Message timestamp and sender information
+
+    2. Advanced Filtering:
+       - Filter by group, sender, date range, time period
+       - Attachments-only filter option
+       - Recent hours quick filter (1-48 hours)
+       - Date picker for specific date selection
+
+    3. AI Analysis Integration:
+       - Sentiment analysis for conversations
+       - Message summarization capabilities
+       - Custom AI analysis types support
+       - Cached analysis results display
+
+    4. Activity Visualization:
+       - Hourly activity heatmap for each group
+       - Message count statistics
+       - Interactive activity pattern display
+
+PAGE STRUCTURE:
+    - Tab navigation (By Group / By Sender / All Messages / AI Analysis)
+    - Global filter system with multiple criteria
+    - Message list with pagination
+    - Activity heatmaps for visual insights
+    - Modal dialogs for AI analysis results
+
+TESTING:
+    1. Navigate to /messages endpoint
+    2. Test all filter combinations (group, sender, date, attachments)
+    3. Verify tab switching maintains filter state
+    4. Test activity heatmap interactivity
+    5. Verify attachment viewing functionality
+    6. Test AI analysis features (sentiment, summary)
+    7. Check pagination for large message sets
+    8. Verify real-time filter updates
+
+API ENDPOINTS USED:
+    - GET /messages - Retrieve filtered messages
+    - GET /api/sentiment - Run sentiment analysis
+    - GET /api/summary - Generate message summary
+    - GET /api/ai-analysis/run - Execute custom AI analysis
+    - GET /attachment/{id} - Retrieve attachment files
+
+DATABASE INTERACTIONS:
+    - Complex queries on messages table with filtering
+    - Joins with users, groups tables for names
+    - Reads from attachments table for media
+    - Caches AI analysis results in analysis tables
 """
 
 import logging
@@ -58,8 +116,8 @@ class MessagesPage(BasePage):
 
                     // Handle date based on mode
                     if (filters.dateMode === 'today') {
-                        const today = new Date().toISOString().split('T')[0];
-                        newUrl.searchParams.set('date', today);
+                        // Use server-side calculated today (respects user timezone preference)
+                        // This is just for URL, server will recalculate properly
                         newUrl.searchParams.set('date_mode', 'today');
                     } else if (filters.dateMode === 'specific' && filters.date) {
                         newUrl.searchParams.set('date', filters.date);
@@ -230,15 +288,18 @@ class MessagesPage(BasePage):
         hours_filter = filters.get('hours', 24)
         date_mode = filters.get('date_mode', 'all')
 
-        # Handle date based on mode
-        if date_mode == 'today':
-            from datetime import date
-            date_param = date.today().isoformat()
-        elif date_mode == 'all':
-            date_param = None
-
         # Get user timezone for filtering
         user_timezone = self.get_user_timezone(query)
+
+        # Handle date based on mode - MUST use user timezone
+        if date_mode == 'today':
+            # Get today in user's timezone - use ISO for database, formatted for display
+            _, _, iso_date, formatted_date = self.get_today_in_user_timezone()
+            date_param = iso_date  # Use ISO format for database queries
+            display_date = formatted_date  # Use formatted for display
+        elif date_mode == 'all':
+            date_param = None
+            display_date = None
 
         # Filter groups based on group_filter parameter
         if group_filter:
@@ -478,15 +539,18 @@ class MessagesPage(BasePage):
         sender_filter = filters.get('sender_id')
         date_mode = filters.get('date_mode', 'all')
 
-        # Handle date based on mode
-        if date_mode == 'today':
-            from datetime import date
-            date_param = date.today().isoformat()
-        elif date_mode == 'all':
-            date_param = None
-
         # Get user timezone for filtering
         user_timezone = self.get_user_timezone(query)
+
+        # Handle date based on mode - MUST use user timezone
+        if date_mode == 'today':
+            # Get today in user's timezone - use ISO for database, formatted for display
+            _, _, iso_date, formatted_date = self.get_today_in_user_timezone()
+            date_param = iso_date  # Use ISO format for database queries
+            display_date = formatted_date  # Use formatted for display
+        elif date_mode == 'all':
+            date_param = None
+            display_date = None
 
         # Calculate date range from filters - same logic as groups tab
         date_mode = filters.get('date_mode', 'all')
@@ -1245,7 +1309,7 @@ class MessagesPage(BasePage):
 
                         const url = `/api/sentiment-preview?group_id=${{encodeURIComponent(filters.groupId)}}&date=${{filters.date}}&timezone=${{encodeURIComponent(currentSentimentTimezone)}}`;
 
-                        fetch(url)
+                        fetchWithTimeout(url, {{}}, 15000)
                             .then(response => response.json())
                             .then(data => {{
                                 if (data.status === 'success') {{
@@ -1293,7 +1357,7 @@ class MessagesPage(BasePage):
 
                         const url = `/api/sentiment-cached?group_id=${{encodeURIComponent(groupId)}}&date=${{date}}&timezone=${{encodeURIComponent(currentSentimentTimezone)}}`;
 
-                        fetch(url)
+                        fetchWithTimeout(url, {{}}, 15000)
                             .then(response => response.json())
                             .then(data => {{
                                 if (data.status === 'success' && data.cached && data.result) {{
@@ -1335,7 +1399,7 @@ class MessagesPage(BasePage):
                             ? `/api/sentiment?group_id=${{encodeURIComponent(filters.groupId)}}&force=true&date=${{filters.date}}&timezone=${{encodeURIComponent(currentSentimentTimezone)}}`
                             : `/api/sentiment?group_id=${{encodeURIComponent(filters.groupId)}}&date=${{filters.date}}&timezone=${{encodeURIComponent(currentSentimentTimezone)}}`;
 
-                        fetch(url)
+                        fetchWithTimeout(url, {{}}, 30000)
                             .then(response => response.json())
                             .then(data => {{
                                 if (data.status === 'started') {{
@@ -1358,7 +1422,7 @@ class MessagesPage(BasePage):
                         const contentDiv = document.getElementById('sentiment-analysis-content');
 
                         function checkSentimentStatus() {{
-                            fetch(`/api/sentiment?job_id=${{jobId}}`)
+                            fetchWithTimeout(`/api/sentiment?job_id=${{jobId}}`, {{}}, 10000)
                                 .then(response => response.json())
                                 .then(data => {{
                                     if (data.status === 'completed') {{

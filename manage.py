@@ -567,10 +567,44 @@ class SignalBotManager:
             'env_vars': {k: v for k, v in env.items() if 'DEBUG' in k or 'WEB' in k or 'FLASK' in k}
         })
 
-        # Redirect output to debug log in debug mode
+        # Capture output for error detection during startup
         if debug or self.debug_mode:
-            debug_log_file = open('signal_bot_debug.log', 'a')
-            process = subprocess.Popen(cmd, shell=True, stdout=debug_log_file, stderr=subprocess.STDOUT, env=env)
+            # In debug mode, show errors immediately and also log them
+            process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, text=True)
+
+            # Give the process a moment to start and potentially fail
+            time.sleep(1)
+
+            # Check if process failed immediately
+            poll = process.poll()
+            if poll is not None:
+                # Process failed to start
+                stdout, stderr = process.communicate()
+                error_msg = f"❌ Web server failed to start (exit code: {poll})"
+                if stdout:
+                    error_msg += f"\nOutput: {stdout}"
+                if stderr:
+                    error_msg += f"\nError: {stderr}"
+                print(error_msg)
+                self.debug_log("Web server startup failed", {
+                    'exit_code': poll,
+                    'stdout': stdout,
+                    'stderr': stderr
+                })
+                # Write to debug log
+                with open('signal_bot_debug.log', 'a') as f:
+                    f.write(f"\n{error_msg}\n")
+                raise RuntimeError(f"Web server failed to start: {stderr or stdout}")
+            else:
+                # Process started, redirect output to debug log
+                debug_log_file = open('signal_bot_debug.log', 'a')
+                # Read any initial output
+                import select
+                if select.select([process.stdout], [], [], 0)[0]:
+                    initial_output = process.stdout.read()
+                    if initial_output:
+                        debug_log_file.write(initial_output)
+                        debug_log_file.flush()
         else:
             process = subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
 

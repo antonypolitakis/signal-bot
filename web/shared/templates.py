@@ -139,22 +139,8 @@ def get_standard_css() -> str:
                     border-color: #007bff;
                     box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
                 }
-                /* Status and alerts */
-                .alert {
-                    padding: 12px 20px;
-                    border-radius: 5px;
-                    margin-bottom: 20px;
-                }
-                .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-                .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-                .alert-warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
-                .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-                /* Loading states */
-                .loading {
-                    text-align: center;
-                    padding: 40px;
-                    color: #6c757d;
-                }
+                /* Alert styles moved to common.css */
+                /* Loading states moved to common.css */
                 /* Message displays */
                 .messages-container { margin-top: 20px; }
                 .message-item {
@@ -288,28 +274,8 @@ def get_standard_css() -> str:
                     padding-bottom: 10px;
                     flex-wrap: wrap;
                 }
-                .tab-btn {
-                    padding: 10px 20px;
-                    border: none;
-                    background: #f8f9fa;
-                    color: #495057;
-                    cursor: pointer;
-                    border-radius: 20px 20px 0 0;
-                    transition: all 0.3s;
-                    text-decoration: none;
-                    display: inline-block;
-                }
-                .tab-btn:hover { background: #e9ecef; }
-                .tab-btn.active {
-                    background: #007bff;
-                    color: white;
-                }
-                .tab-content {
-                    display: none;
-                }
-                .tab-content.active {
-                    display: block;
-                }
+                /* Tab button styles moved to common.css */
+                /* Tab styles moved to common.css */
                 /* Ensure consistent opaque backgrounds for tab content cards */
                 .tab-content .card {
                     background: white;
@@ -468,31 +434,14 @@ def get_standard_css() -> str:
                     flex: 1;
                     min-width: 200px;
                 }
-                .stat-card {
-                    background: white;
-                    border-radius: 10px;
-                    padding: 20px;
-                    text-align: center;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                }
-                .stat-number { font-size: 2em; font-weight: bold; color: #007bff; }
-                .stat-label { margin-top: 5px; color: #666; }
+                /* Stat card styles moved to common.css */
 
                 /* Setup page styles */
                 .setup-steps { margin: 30px 0; }
                 .setup-step { padding: 20px; margin-bottom: 15px; border-radius: 8px; border-left: 4px solid #ddd; }
                 .setup-step.step-complete { background: #d4edda; border-color: #c3e6cb; }
                 .setup-step.step-pending { background: #fff3cd; border-color: #ffeaa7; }
-                .status-indicator {
-                    display: inline-block;
-                    width: 12px;
-                    height: 12px;
-                    border-radius: 50%;
-                    margin-right: 8px;
-                }
-                .status-good { background: #28a745; }
-                .status-warning { background: #ffc107; }
-                .status-error { background: #dc3545; }
+                /* Status indicators moved to common.css */
                 .setup-actions { margin: 30px 0; }
                 .setup-status { margin: 30px 0; }
                 .setup-status ul { list-style: none; padding: 0; }
@@ -575,28 +524,7 @@ def get_standard_css() -> str:
                     }
                 }
 
-                /* Additional styles for AI and analysis pages */
-                .provider-card {
-                    background: #f8f9fa;
-                    border: 1px solid #e9ecef;
-                    border-radius: 8px;
-                    padding: 20px;
-                    margin-bottom: 20px;
-                }
-                .provider-available { border-left: 4px solid #28a745; }
-                .provider-unavailable { border-left: 4px solid #dc3545; }
-                .status-badge {
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    font-size: 12px;
-                    font-weight: bold;
-                    text-transform: uppercase;
-                }
-                .status-available { background: #d4edda; color: #155724; }
-                .status-unavailable { background: #f8d7da; color: #721c24; }
-                .provider-details { margin-top: 15px; }
-                .provider-details dt { font-weight: bold; margin-top: 10px; }
-                .provider-details dd { margin-left: 20px; color: #666; }
+                /* Provider card styles moved to common.css */
                 .refresh-btn {
                     background: #007cba;
                     color: white;
@@ -645,21 +573,7 @@ def get_standard_css() -> str:
                     border-radius: 4px;
                 }
 
-                /* Status indicators */
-                .status {
-                    padding: 4px 8px;
-                    border-radius: 12px;
-                    font-size: 0.9em;
-                    font-weight: 500;
-                }
-                .status.active {
-                    background: #d4edda;
-                    color: #155724;
-                }
-                .status.inactive {
-                    background: #f8d7da;
-                    color: #721c24;
-                }
+                /* Status styles moved to common.css */
 
                 /* Activity Chart Styles */
                 .activity-filters {
@@ -921,6 +835,7 @@ def render_page(title: str, subtitle: str, content: str, active_page: str = '', 
         <head>
             <title>Signal Bot - {title}</title>
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link rel="stylesheet" href="/static/css/common.css">
             <style>
                 {get_standard_css()}
                 {extra_css}
@@ -933,7 +848,66 @@ def render_page(title: str, subtitle: str, content: str, active_page: str = '', 
                 {content}
             </div>
             </div>
+            <script src="/static/js/common.js"></script>
             <script>
+
+                // Global utility: Async fetch with timeout
+                async function fetchWithTimeout(url, options = {{}}, timeout = 30000) {{
+                    const controller = new AbortController();
+                    const id = setTimeout(() => controller.abort(), timeout);
+
+                    try {{
+                        const response = await fetch(url, {{
+                            ...options,
+                            signal: controller.signal
+                        }});
+                        clearTimeout(id);
+                        return response;
+                    }} catch (error) {{
+                        clearTimeout(id);
+                        if (error.name === 'AbortError') {{
+                            throw new Error('Request timeout');
+                        }}
+                        throw error;
+                    }}
+                }}
+
+                // Global utility: Wrap async functions with error handling
+                function asyncHandler(asyncFunc) {{
+                    return async function(...args) {{
+                        try {{
+                            await asyncFunc.apply(this, args);
+                        }} catch (error) {{
+                            console.error('Async error:', error);
+                            showNotification(`Error: ${{error.message}}`, 'error');
+                        }}
+                    }};
+                }}
+
+                // Global utility: Prevent double-submission of forms
+                document.addEventListener('DOMContentLoaded', function() {{
+                    document.querySelectorAll('form').forEach(form => {{
+                        form.addEventListener('submit', function(e) {{
+                            const submitBtn = form.querySelector('[type="submit"]');
+                            if (submitBtn && submitBtn.disabled) {{
+                                e.preventDefault();
+                                return false;
+                            }}
+                            if (submitBtn) {{
+                                setButtonLoading(submitBtn, true, '⏳ Submitting...');
+                            }}
+                        }});
+                    }});
+
+                    // Add debouncing to all buttons with async operations
+                    document.querySelectorAll('button[onclick*="fetch"], button[onclick*="async"]').forEach(btn => {{
+                        const originalOnclick = btn.onclick;
+                        if (originalOnclick) {{
+                            btn.onclick = debounce(originalOnclick, 300);
+                        }}
+                    }});
+                }});
+
                 // Global notification system
                 function showNotification(message, type = 'info', duration = 5000) {{
                     const container = document.getElementById('notification-container');
@@ -1055,7 +1029,7 @@ def get_emoji_picker_for_reactions() -> str:
                 </div>
 
                 <div style="text-align: center; margin-top: 20px;">
-                    <button class="btn" onclick="saveFromModal()">Save Reactions</button>
+                    <button class="btn" onclick="saveFromModal(event)">Save Reactions</button>
                     <button class="btn btn-secondary" onclick="closeEmojiPicker()">Cancel</button>
                 </div>
 
