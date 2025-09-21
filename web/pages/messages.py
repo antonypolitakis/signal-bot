@@ -312,6 +312,7 @@ class MessagesPage(BasePage):
         # Convert datetime to strings for database
         date_mode = filters.get('date_mode', 'all')
 
+
         if filters.get('date'):
             # Specific date selected - use it directly
             start_date = filters['date']

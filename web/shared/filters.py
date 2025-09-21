@@ -422,6 +422,7 @@ class GlobalFilterSystem:
             # For "today" mode without explicit hours parameter, show whole day (not last 24 hours)
             hours = 0
 
+
         return {
             'group_id': query.get('group_id', [''])[0] if 'group_id' in query else None,
             'sender_id': query.get('sender_id', [''])[0] if 'sender_id' in query else None,
