@@ -69,6 +69,13 @@
 
     // Refresh page with current filters in URL
     FilterManager.refreshWithFilters = function() {
+        // Prevent infinite reload loops
+        if (window.filterNavigationInProgress) {
+            console.warn('Filter navigation already in progress, skipping');
+            return;
+        }
+        window.filterNavigationInProgress = true;
+
         const filters = FilterManager.getFilters();
         const url = new URL(window.location.href);
 

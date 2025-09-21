@@ -180,22 +180,46 @@ class GlobalFilterSystem:
         const GlobalFilters = {
             // Get all current filter values
             getValues: function() {
-                // Cache DOM elements for better performance
-                const groupFilter = document.getElementById('global-group-filter');
-                const senderFilter = document.getElementById('global-sender-filter');
-                const dateRadio = document.querySelector('input[name="date-mode"]:checked');
-                const dateInput = document.getElementById('global-date');
-                const hoursFilter = document.getElementById('global-hours-filter');
-                const attachmentsOnly = document.getElementById('global-attachments-only');
+                const startTime = performance.now();
+                const debug = window.DebugLogger || console;
 
-                return {
-                    groupId: groupFilter ? groupFilter.value : '',
-                    senderId: senderFilter ? senderFilter.value : '',
-                    dateMode: dateRadio ? dateRadio.value : 'all',
-                    date: dateInput ? dateInput.value : '',
-                    hours: hoursFilter ? parseInt(hoursFilter.value) : 0,
-                    attachmentsOnly: attachmentsOnly ? attachmentsOnly.checked : false
-                };
+                try {
+                    debug.log('GlobalFilters.getValues START', {timestamp: Date.now()});
+
+                    // Cache DOM elements for better performance
+                    const groupFilter = document.getElementById('global-group-filter');
+                    const senderFilter = document.getElementById('global-sender-filter');
+                    const dateRadio = document.querySelector('input[name="date-mode"]:checked');
+                    const dateInput = document.getElementById('global-date');
+                    const hoursFilter = document.getElementById('global-hours-filter');
+                    const attachmentsOnly = document.getElementById('global-attachments-only');
+
+                    const elapsed = performance.now() - startTime;
+                    if (elapsed > 10) {
+                        debug.log('GlobalFilters.getValues SLOW DOM', {elapsed, timestamp: Date.now()});
+                    }
+
+                    const result = {
+                        groupId: groupFilter ? groupFilter.value : '',
+                        senderId: senderFilter ? senderFilter.value : '',
+                        dateMode: dateRadio ? dateRadio.value : 'all',
+                        date: dateInput ? dateInput.value : '',
+                        hours: hoursFilter ? parseInt(hoursFilter.value) : 0,
+                        attachmentsOnly: attachmentsOnly ? attachmentsOnly.checked : false
+                    };
+
+                    const totalElapsed = performance.now() - startTime;
+                    debug.log('GlobalFilters.getValues COMPLETE', {elapsed: totalElapsed, result, timestamp: Date.now()});
+
+                    return result;
+                } catch (error) {
+                    debug.log('GlobalFilters.getValues ERROR', {
+                        error: error.toString(),
+                        stack: error.stack,
+                        timestamp: Date.now()
+                    });
+                    throw error;
+                }
             },
 
             // Get filter values for API calls

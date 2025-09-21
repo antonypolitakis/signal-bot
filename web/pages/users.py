@@ -213,7 +213,7 @@ class UsersPage(BasePage):
         if tab == 'discovered':
             tab_content = f"""
                 <div id="{tab}-tab" class="tab-content active">
-                    <div class="content-card">
+                    <div class="card">
                         <h3>Discovered Users</h3>
                         <p class="text-muted">Users found in groups but not yet configured</p>
                         {self.render_user_list(discovered_users, False)}
@@ -223,7 +223,7 @@ class UsersPage(BasePage):
         else:  # configured (default)
             tab_content = f"""
                 <div id="{tab}-tab" class="tab-content active">
-                    <div class="content-card">
+                    <div class="card">
                         <h3>Configured Users</h3>
                         <p class="text-muted">Users with custom emoji reactions configured</p>
                         {self.render_user_list(configured_users, True)}
@@ -232,9 +232,9 @@ class UsersPage(BasePage):
             """
 
         content = f"""
-            <div class="user-tabs">
-                <button class="tab-btn {'active' if tab == 'configured' else ''}" onclick="switchTab('configured')">Configured Users ({total_configured})</button>
-                <button class="tab-btn {'active' if tab == 'discovered' else ''}" onclick="switchTab('discovered')">Discovered Users ({total_discovered})</button>
+            <div class="tabs">
+                <a href="/users?tab=configured" class="tab-btn {'active' if tab == 'configured' else ''}">Configured Users ({total_configured})</a>
+                <a href="/users?tab=discovered" class="tab-btn {'active' if tab == 'discovered' else ''}">Discovered Users ({total_discovered})</a>
             </div>
 
             {tab_content}

@@ -90,148 +90,7 @@ class MessagesPage(BasePage):
         # Include the global filter JavaScript
         js_code = GlobalFilterSystem.get_javascript()
 
-        # Add page-specific JavaScript
-        js_code += """
-                function showTab(tabName) {
-                    const tabs = document.querySelectorAll('.tab-content');
-                    tabs.forEach(tab => tab.classList.remove('active'));
-
-                    const tabButtons = document.querySelectorAll('.tab-btn');
-                    tabButtons.forEach(btn => btn.classList.remove('active'));
-
-                    document.getElementById(tabName + '-tab').classList.add('active');
-                    event.target.classList.add('active');
-                }
-
-                function switchTab(newTab) {
-                    const timestamp = Date.now();
-                    console.log(`[${timestamp}] switchTab called for: ${newTab}`);
-
-                    // Prevent multiple rapid clicks with better debouncing
-                    if (window.switchTabInProgress) {
-                        console.log(`[${timestamp}] Tab switch already in progress, ignoring click`);
-                        return false;
-                    }
-
-                    // Also check if we just switched tabs recently (within 500ms)
-                    const now = Date.now();
-                    if (window.lastTabSwitch && (now - window.lastTabSwitch) < 500) {
-                        console.log(`[${timestamp}] Too soon since last switch (${now - window.lastTabSwitch}ms), ignoring`);
-                        return false;
-                    }
-
-                    window.switchTabInProgress = true;
-                    window.lastTabSwitch = now;
-
-                    console.log(`[${timestamp}] Starting tab switch to ${newTab}`);
-
-                    try {
-                        // Keep current filters when switching tabs
-                        console.log(`[${timestamp}] Getting filter values...`);
-                        const filters = GlobalFilters.getValues();
-                        console.log(`[${timestamp}] Filters retrieved:`, filters);
-
-                        const newUrl = new URL('/messages', window.location.origin);
-                        newUrl.searchParams.set('tab', newTab);
-
-                        if (filters.groupId) newUrl.searchParams.set('group_id', filters.groupId);
-                        if (filters.senderId) newUrl.searchParams.set('sender_id', filters.senderId);
-                        if (filters.hours) newUrl.searchParams.set('hours', filters.hours);
-                        if (filters.attachmentsOnly) newUrl.searchParams.set('attachments_only', 'true');
-
-                        // Handle date based on mode
-                        if (filters.dateMode === 'today') {
-                            newUrl.searchParams.set('date_mode', 'today');
-                        } else if (filters.dateMode === 'specific' && filters.date) {
-                            newUrl.searchParams.set('date', filters.date);
-                            newUrl.searchParams.set('date_mode', 'specific');
-                        } else {
-                            newUrl.searchParams.set('date_mode', 'all');
-                        }
-
-                        console.log(`[${timestamp}] Navigating to:`, newUrl.toString());
-
-                        // Store the URL we're navigating to
-                        window.pendingNavigation = newUrl.toString();
-
-                        // Add timeout to reset the flag if navigation fails
-                        setTimeout(() => {
-                            if (window.switchTabInProgress) {
-                                console.log(`[${timestamp}] Navigation timeout - resetting flag`);
-                                window.switchTabInProgress = false;
-                                window.pendingNavigation = null;
-                            }
-                        }, 3000);
-
-                        // Use a small delay to consolidate rapid clicks
-                        setTimeout(() => {
-                            // Only navigate if this is still the pending navigation
-                            if (window.pendingNavigation === newUrl.toString()) {
-                                console.log(`[${timestamp}] Executing navigation to:`, window.pendingNavigation);
-                                window.location.href = window.pendingNavigation;
-                            } else {
-                                console.log(`[${timestamp}] Navigation cancelled - newer navigation pending`);
-                                window.switchTabInProgress = false;
-                            }
-                        }, 100);
-                    } catch (error) {
-                        console.error(`[${timestamp}] Error in switchTab:`, error);
-                        window.switchTabInProgress = false;
-                    }
-
-                    return false;
-                }
-
-
-                // Add event listener approach as backup
-                document.addEventListener('DOMContentLoaded', function() {
-                    // Attach click handlers to all tab links
-                    const tabLinks = document.querySelectorAll('.tab-btn');
-                    tabLinks.forEach(link => {
-                        link.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const tabName = this.getAttribute('data-tab');
-                            if (tabName) {
-                                console.log(`Event listener triggered for tab: ${tabName}`);
-                                switchTab(tabName);
-                            }
-                            return false;
-                        });
-                    });
-                });
-
-                // Initialize default tab
-                document.addEventListener('DOMContentLoaded', function() {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const tab = urlParams.get('tab') || 'groups';
-
-                    const tabButton = document.querySelector(`[onclick="showTab('${tab}')"]`);
-                    if (tabButton) {
-                        tabButton.classList.add('active');
-                    }
-
-                    const tabContent = document.getElementById(tab + '-tab');
-                    if (tabContent) {
-                        tabContent.classList.add('active');
-                    }
-
-                    // Show/hide member filter based on group selection
-                    const groupFilter = document.getElementById('group-filter');
-                    if (groupFilter) {
-                        groupFilter.addEventListener('change', function() {
-                            const memberContainer = document.getElementById('member-filter-container');
-                            if (memberContainer) {
-                                if (this.value) {
-                                    memberContainer.style.display = 'block';
-                                } else {
-                                    memberContainer.style.display = 'none';
-                                }
-                            }
-                        });
-                    }
-                });
-        """
+        # All page-specific JavaScript is now in /static/js/messages.js
         return js_code
 
     def _render_global_filters(self, query: Dict[str, Any]) -> str:
@@ -279,8 +138,32 @@ class MessagesPage(BasePage):
             date_mode=filters.get('date_mode', 'all')
         )
 
+    def _get_filter_params(self, filters: Dict[str, Any]) -> str:
+        """Build query string from current filters."""
+        params = []
+
+        if filters.get('group_id'):
+            params.append(f"group_id={filters['group_id']}")
+        if filters.get('sender_id'):
+            params.append(f"sender_id={filters['sender_id']}")
+        if filters.get('hours'):
+            params.append(f"hours={filters['hours']}")
+        if filters.get('date'):
+            params.append(f"date={filters['date']}")
+        if filters.get('date_mode'):
+            params.append(f"date_mode={filters['date_mode']}")
+        if filters.get('attachments_only'):
+            params.append(f"attachments_only=true")
+
+        if params:
+            return '&' + '&'.join(params)
+        return ''
+
     def render_content(self, query: Dict[str, Any]) -> str:
         tab = query.get('tab', ['groups'])[0]
+
+        # Parse filters from query
+        filters = GlobalFilterSystem.parse_query_filters(query)
 
         # Debug logging for tab requests
         import logging
@@ -326,10 +209,10 @@ class MessagesPage(BasePage):
             {global_filters}
 
             <div class="tabs">
-                <a href="#" onclick="return switchTab('groups');" class="tab-btn {'active' if tab == 'groups' else ''}" data-tab="groups">By Group</a>
-                <a href="#" onclick="return switchTab('senders');" class="tab-btn {'active' if tab == 'senders' else ''}" data-tab="senders">By Sender</a>
-                <a href="#" onclick="return switchTab('all');" class="tab-btn {'active' if tab == 'all' else ''}" data-tab="all">All Messages</a>
-                <a href="#" onclick="return switchTab('ai-analysis');" class="tab-btn {'active' if tab == 'ai-analysis' else ''}" data-tab="ai-analysis">AI Analysis</a>
+                <a href="/messages?tab=groups{self._get_filter_params(filters)}" class="tab-btn {'active' if tab == 'groups' else ''}" data-tab="groups">By Group</a>
+                <a href="/messages?tab=senders{self._get_filter_params(filters)}" class="tab-btn {'active' if tab == 'senders' else ''}" data-tab="senders">By Sender</a>
+                <a href="/messages?tab=all{self._get_filter_params(filters)}" class="tab-btn {'active' if tab == 'all' else ''}" data-tab="all">All Messages</a>
+                <a href="/messages?tab=ai-analysis{self._get_filter_params(filters)}" class="tab-btn {'active' if tab == 'ai-analysis' else ''}" data-tab="ai-analysis">AI Analysis</a>
             </div>
 
             <div id="{tab}-tab" class="tab-content active">
@@ -337,6 +220,7 @@ class MessagesPage(BasePage):
             </div>
 
             <!-- External JavaScript Files -->
+            <script src="/static/js/messages.js"></script>
             <script src="/static/js/messages-common.js"></script>
             <script src="/static/js/filter-manager.js"></script>
             <script src="/static/js/groups-tab.js"></script>
@@ -471,13 +355,13 @@ class MessagesPage(BasePage):
                     view_params += "&attachments_only=true"
 
                 groups_html += f"""
-                <div class="group-card" style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div class="card">
+                    <div class="message-header">
                         <div>
-                            <h4 style="margin: 0 0 5px 0;">{group.group_name or 'Unnamed Group'}</h4>
-                            <p style="margin: 0; color: #666;">{message_count} messages • {group.member_count or 0} members</p>
+                            <h4>{group.group_name or 'Unnamed Group'}</h4>
+                            <p class="text-muted">{message_count} messages • {group.member_count or 0} members</p>
                         </div>
-                        <div style="display: flex; gap: 10px;">
+                        <div>
                             <a href="/messages?{view_params}" class="btn btn-secondary">View Messages</a>
                         </div>
                     </div>
@@ -758,17 +642,15 @@ class MessagesPage(BasePage):
                     view_params += "&attachments_only=true"
 
                 senders_html += f"""
-                <div class="sender-card" style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div class="card">
+                    <div class="message-header">
                         <div>
-                            <h4 style="margin: 0 0 5px 0;">{sender_name}</h4>
-                            <p style="margin: 0; color: #666;">{message_count} messages • {group_count} groups</p>
-                            <p style="margin: 5px 0 0 0; color: #888; font-size: 0.9em;">{sender_subtitle}</p>
-                            <p style="margin: 5px 0 0 0; color: #888; font-size: 0.85em;">
-                                First: {first_msg} • Last: {last_msg}
-                            </p>
+                            <h4>{sender_name}</h4>
+                            <p class="text-muted">{message_count} messages • {group_count} groups</p>
+                            <p class="text-muted"><small>{sender_subtitle}</small></p>
+                            <p class="text-muted"><small>First: {first_msg} • Last: {last_msg}</small></p>
                         </div>
-                        <div style="display: flex; gap: 10px;">
+                        <div>
                             <a href="/messages?{view_params}" class="btn btn-secondary">View Messages</a>
                         </div>
                     </div>
@@ -1368,14 +1250,7 @@ class MessagesPage(BasePage):
                     }});
 
                     function getGlobalFilters() {{
-                        // Get current values from global filter form
-                        const groupSelect = document.getElementById('global-group-filter');
-                        const dateInput = document.getElementById('global-date');
-
-                        return {{
-                            groupId: groupSelect ? groupSelect.value : '',
-                            date: dateInput ? dateInput.value : ''
-                        }};
+                        return GlobalFilters.getValues();
                     }}
 
                     function showSentimentPreview() {{

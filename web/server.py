@@ -243,8 +243,10 @@ class ModularWebServer:
                         self._send_error_response(404, "Page not found")
 
                 except Exception as e:
-                    logging.error(f"Request handling error: {e}")
-                    self._send_error_response(500, "Internal server error")
+                    import traceback
+                    error_trace = traceback.format_exc()
+                    logging.error(f"Request handling error: {e}\n{error_trace}")
+                    self._send_error_response(500, f"Internal server error: {str(e)}")
 
             def do_POST(self):
                 """Handle POST requests."""
@@ -256,7 +258,20 @@ class ModularWebServer:
                     content_length = int(self.headers.get('Content-Length', 0))
                     post_data = self.rfile.read(content_length).decode('utf-8')
 
-                    if path.startswith('/api/'):
+                    if path == '/debug_log':
+                        # Handle debug log submission
+                        try:
+                            import json
+                            log_entry = json.loads(post_data)
+                            logging.warning(f"[CLIENT DEBUG] {log_entry.get('message', 'No message')}: {log_entry.get('data', {})}")
+                            # Save to debug log file
+                            with open('client_debug.log', 'a') as f:
+                                f.write(json.dumps(log_entry) + '\n')
+                            self._send_json_response({'status': 'ok'})
+                        except Exception as e:
+                            logging.error(f"Failed to process debug log: {e}")
+                            self._send_json_response({'status': 'error', 'message': str(e)})
+                    elif path.startswith('/api/'):
                         self._handle_api_post_request(path, post_data)
                     else:
                         self._send_error_response(404, "Endpoint not found")

@@ -149,8 +149,41 @@ if [ $DEBUG_MODE -eq 1 ]; then
     ARGS="$ARGS --debug"
 fi
 
+# Prepare Python command early for restart
+if [ -f "venv/bin/python" ]; then
+    PYTHON_CMD="venv/bin/python"
+else
+    PYTHON_CMD="python3"
+fi
+
 # Handle special commands
 case "$1" in
+    restart)
+        echo -e "${YELLOW}Restarting Signal Bot...${NC}"
+        echo -e "${CYAN}Stopping services...${NC}"
+        # Stop existing services first
+        if [ $DEBUG_MODE -eq 1 ]; then
+            DEBUG=1 $PYTHON_CMD manage.py stop
+        else
+            $PYTHON_CMD manage.py stop
+        fi
+
+        # Wait for services to stop
+        sleep 2
+
+        echo -e "${GREEN}Starting services...${NC}"
+        # Start with same debug mode, pass along any additional arguments after 'restart'
+        # The start command will automatically add --daemon flag
+        shift  # Remove 'restart' from arguments
+        if [ $DEBUG_MODE -eq 1 ]; then
+            # Export DEBUG so it persists through exec
+            export DEBUG=1
+            exec $0 start "$@"
+        else
+            exec $0 start "$@"
+        fi
+        exit $?
+        ;;
     debug-status)
         echo -e "${CYAN}=== Debug Status ===${NC}"
         echo "Debug Log: $DEBUG_LOG"
@@ -181,18 +214,11 @@ case "$1" in
         ;;
 esac
 
-# Automatically add --daemon flag for start/restart commands
-if [[ "$1" == "start" ]] || [[ "$1" == "restart" ]]; then
+# Automatically add --daemon flag for start commands only (restart handles itself)
+if [[ "$1" == "start" ]]; then
     if [[ ! "$ARGS" == *"--daemon"* ]]; then
         ARGS="$ARGS --daemon"
     fi
-fi
-
-# Prepare Python command
-if [ -f "venv/bin/python" ]; then
-    PYTHON_CMD="venv/bin/python"
-else
-    PYTHON_CMD="python3"
 fi
 
 # Add debug Python flags in debug mode (application-level debugging only)

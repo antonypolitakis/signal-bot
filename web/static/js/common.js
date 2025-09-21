@@ -4,6 +4,237 @@
  */
 
 // ============================================================================
+// DEBUG LOGGING SYSTEM
+// ============================================================================
+
+// Check if DEBUG mode is enabled
+const DEBUG_MODE = window.location.search.includes('debug=1') ||
+                   window.localStorage.getItem('signal_bot_debug') === '1';
+
+// Global DebugLogger for client-side debugging (only active in DEBUG mode)
+const DebugLogger = {
+    logs: [],
+    maxLogs: 100,
+    enabled: DEBUG_MODE,
+
+    log: function(message, data = {}) {
+        if (!this.enabled) return;
+
+        const entry = {
+            timestamp: new Date().toISOString(),
+            message: message,
+            data: data,
+            url: window.location.href,
+            userAgent: navigator.userAgent,
+            page: window.location.pathname
+        };
+
+        this.logs.push(entry);
+        if (this.logs.length > this.maxLogs) {
+            this.logs.shift();
+        }
+
+        console.log(`[DEBUG] ${message}`, data);
+    },
+
+    sendToServer: function(entry) {
+        if (!this.enabled) return;
+
+        try {
+            fetch('/debug_log', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(entry)
+            }).catch(err => {
+                console.error('Failed to send debug log:', err);
+            });
+        } catch (error) {
+            console.error('Error sending debug log:', error);
+        }
+    },
+
+    getNavigationTiming: function() {
+        const timing = performance.getEntriesByType('navigation')[0];
+        if (!timing) return null;
+
+        return {
+            domContentLoaded: timing.domContentLoadedEventEnd - timing.domContentLoadedEventStart,
+            loadComplete: timing.loadEventEnd - timing.loadEventStart,
+            domInteractive: timing.domInteractive - timing.fetchStart,
+            pageLoadTime: timing.loadEventEnd - timing.fetchStart
+        };
+    },
+
+    sendDebugReport: function() {
+        if (!this.enabled || this.logs.length === 0) return;
+
+        const report = {
+            timestamp: new Date().toISOString(),
+            message: 'Debug Report',
+            data: {
+                logs: this.logs,
+                timing: this.getNavigationTiming(),
+                memory: performance.memory ? {
+                    used: Math.round(performance.memory.usedJSHeapSize / 1048576) + 'MB',
+                    total: Math.round(performance.memory.totalJSHeapSize / 1048576) + 'MB',
+                    limit: Math.round(performance.memory.jsHeapSizeLimit / 1048576) + 'MB'
+                } : null
+            }
+        };
+
+        this.sendToServer(report);
+    },
+
+    logError: function(error) {
+        if (!this.enabled) {
+            // Still throw error even if not logging
+            throw error;
+        }
+
+        const errorInfo = {
+            message: error.message || error.toString(),
+            stack: error.stack,
+            url: window.location.href,
+            timestamp: new Date().toISOString()
+        };
+
+        this.log('ERROR', errorInfo);
+        this.sendToServer({
+            timestamp: new Date().toISOString(),
+            message: 'Client Error',
+            data: errorInfo
+        });
+
+        // Re-throw to maintain normal error flow
+        throw error;
+    },
+
+    // Enable/disable debug mode
+    setEnabled: function(enabled) {
+        this.enabled = enabled;
+        if (enabled) {
+            window.localStorage.setItem('signal_bot_debug', '1');
+            console.log('[DEBUG] Debug mode enabled');
+        } else {
+            window.localStorage.removeItem('signal_bot_debug');
+            console.log('[DEBUG] Debug mode disabled');
+        }
+    }
+};
+
+// Setup debug mode monitoring (only when enabled)
+if (DEBUG_MODE) {
+    // Page lifecycle monitoring
+    window.addEventListener('DOMContentLoaded', function() {
+        DebugLogger.log('DOM CONTENT LOADED', {
+            timing: DebugLogger.getNavigationTiming()
+        });
+    });
+
+    window.addEventListener('load', function() {
+        DebugLogger.log('PAGE LOAD COMPLETE', {
+            timing: DebugLogger.getNavigationTiming()
+        });
+    });
+
+    // Monitor visibility changes
+    document.addEventListener('visibilitychange', function() {
+        DebugLogger.log('VISIBILITY CHANGE', {
+            state: document.visibilityState,
+            hidden: document.hidden
+        });
+    });
+
+    // Monitor errors
+    window.addEventListener('error', function(e) {
+        DebugLogger.log('GLOBAL ERROR', {
+            message: e.message,
+            filename: e.filename,
+            line: e.lineno,
+            col: e.colno
+        });
+    });
+
+    // Monitor unhandled promise rejections
+    window.addEventListener('unhandledrejection', function(e) {
+        DebugLogger.log('UNHANDLED REJECTION', {
+            reason: e.reason ? e.reason.toString() : 'unknown'
+        });
+    });
+
+    // Send debug info on page unload if there were issues
+    window.addEventListener('beforeunload', function() {
+        // Log page unload for debugging
+        DebugLogger.log('PAGE UNLOAD', {
+            url: window.location.href,
+            logs_count: DebugLogger.logs.length
+        });
+    });
+}
+
+// ============================================================================
+// STANDARD NOTIFICATION SYSTEM
+// ============================================================================
+
+/**
+ * Show a notification message to the user
+ * @param {string} message - The message to display
+ * @param {string} type - Type of notification (success, error, warning, info)
+ * @param {number} duration - How long to show the notification (ms)
+ */
+function showNotification(message, type = 'info', duration = 3000) {
+    // Check if notification container exists, create if not
+    let container = document.getElementById('notification-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'notification-container';
+        container.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+        `;
+        document.body.appendChild(container);
+    }
+
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type}`;
+    notification.textContent = message;
+    notification.style.cssText = `
+        margin-bottom: 10px;
+        padding: 12px 20px;
+        border-radius: 4px;
+        animation: slideIn 0.3s ease;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    `;
+
+    // Add to container
+    container.appendChild(notification);
+
+    // Debug log if enabled
+    if (typeof DebugLogger !== 'undefined' && DebugLogger.enabled) {
+        DebugLogger.log('Notification shown', {message, type});
+    }
+
+    // Auto-remove after duration
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => notification.remove(), 300);
+    }, duration);
+}
+
+// Shorthand functions for common notification types
+function showSuccess(message) { showNotification(message, 'success'); }
+function showError(message) { showNotification(message, 'error'); }
+function showWarning(message) { showNotification(message, 'warning'); }
+function showInfo(message) { showNotification(message, 'info'); }
+
+// ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
 

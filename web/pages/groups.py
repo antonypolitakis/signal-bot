@@ -112,8 +112,8 @@ class GroupsPage(BasePage):
 
         return f"""
             <div class="user-tabs">
-                <button class="tab-btn {'active' if tab == 'monitored' else ''}" onclick="switchTab('monitored')">Monitored Groups ({monitored_count})</button>
-                <button class="tab-btn {'active' if tab == 'unmonitored' else ''}" onclick="switchTab('unmonitored')">Unmonitored Groups ({unmonitored_count})</button>
+                <a href="/groups?tab=monitored" class="tab-btn {'active' if tab == 'monitored' else ''}">Monitored Groups ({monitored_count})</a>
+                <a href="/groups?tab=unmonitored" class="tab-btn {'active' if tab == 'unmonitored' else ''}">Unmonitored Groups ({unmonitored_count})</a>
             </div>
 
             <div id="{tab}-tab" class="tab-content active">

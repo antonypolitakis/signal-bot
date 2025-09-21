@@ -96,7 +96,9 @@ class AIConfigPage(BasePage):
                             document.getElementById('auto-reactions').checked = data.auto_reactions_enabled || false;
                         })
                         .catch(error => {
-                            console.error('Error loading AI config:', error);
+                            if (typeof DebugLogger !== 'undefined' && DebugLogger.enabled) {
+                                DebugLogger.log('Error loading AI config', {error: error.toString()});
+                            }
                             showMessage('Error loading configuration', 'error');
                         });
                 }
@@ -203,14 +205,10 @@ class AIConfigPage(BasePage):
 
     def render_content(self, query: Dict[str, Any]) -> str:
         return """
-            <h1>AI Configuration</h1>
-            <p>Configure AI providers and settings for sentiment analysis, summaries, and automatic reactions.</p>
-
             <div id="message-area"></div>
 
-            <div class="config-form">
-                <div class="form-section">
-                    <h3>Provider Settings</h3>
+            <div class="card">
+                <h2>Provider Settings</h2>
                     <div class="form-row">
                         <div class="form-group">
                             <label for="provider">AI Provider</label>
@@ -235,10 +233,10 @@ class AIConfigPage(BasePage):
                         <input type="password" id="api-key" placeholder="Enter API key (not needed for Ollama)">
                         <small>Your API key for the selected provider (leave blank for Ollama)</small>
                     </div>
-                </div>
+            </div>
 
-                <div class="form-section">
-                    <h3>Generation Parameters</h3>
+            <div class="card">
+                <h2>Generation Parameters</h2>
                     <div class="form-row">
                         <div class="form-group">
                             <label for="temperature">Temperature</label>
@@ -251,19 +249,19 @@ class AIConfigPage(BasePage):
                             <small>Maximum length of generated responses</small>
                         </div>
                     </div>
-                </div>
+            </div>
 
-                <div class="form-section">
-                    <h3>System Prompt</h3>
+            <div class="card">
+                <h2>System Prompt</h2>
                     <div class="form-group">
                         <label for="system-prompt">System Prompt</label>
                         <textarea id="system-prompt" placeholder="Enter system instructions for the AI..."></textarea>
                         <small>Instructions that define the AI's behavior and personality</small>
                     </div>
-                </div>
+            </div>
 
-                <div class="form-section">
-                    <h3>Feature Toggles</h3>
+            <div class="card">
+                <h2>Feature Toggles</h2>
                     <div class="checkbox-group">
                         <div class="checkbox-item">
                             <input type="checkbox" id="sentiment-enabled">
@@ -278,9 +276,10 @@ class AIConfigPage(BasePage):
                             <label for="auto-reactions">Enable Auto Reactions</label>
                         </div>
                     </div>
-                </div>
+            </div>
 
-                <div class="form-actions">
+            <div class="card">
+                <div class="form-actions" style="display: flex; gap: 10px; justify-content: center;">
                     <button id="test-btn" class="btn btn-secondary" onclick="testConnection()">Test Connection</button>
                     <button id="save-btn" class="btn btn-primary" onclick="saveConfig()">Save Configuration</button>
                 </div>

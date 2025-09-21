@@ -87,7 +87,9 @@ class ComprehensiveDashboard(BasePage):
                     updateAlerts(data.alerts);
                 })
                 .catch(error => {
-                    console.error('Dashboard update failed:', error);
+                    if (typeof DebugLogger !== 'undefined' && DebugLogger.enabled) {
+                        DebugLogger.log('Dashboard update failed', {error: error.toString()});
+                    }
                     showNotification('Error', 'Failed to load dashboard data');
                 });
         }

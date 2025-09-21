@@ -353,7 +353,7 @@ class SettingsPage(BasePage):
             async function testOllama() {
                 const host = document.getElementById('ollama-host').value;
                 if (!host) {
-                    alert('Please enter Ollama host URL');
+                    showError('Please enter Ollama host URL');
                     return;
                 }
 
@@ -364,15 +364,15 @@ class SettingsPage(BasePage):
                         const data = await response.json();
                         if (data.status === 'success') {
                             loadOllamaModels(host);
-                            alert(`✅ Connected successfully! Found ${data.models?.length || 0} models.`);
+                            showSuccess(`Connected successfully! Found ${data.models?.length || 0} models.`);
                         } else {
-                            alert(`❌ Failed to connect: ${data.error}`);
+                            showError(`Failed to connect: ${data.error}`);
                         }
                     } else {
-                        alert(`❌ Failed to connect: HTTP ${response.status}`);
+                        showError(`Failed to connect: HTTP ${response.status}`);
                     }
                 } catch (error) {
-                    alert(`❌ Connection failed: ${error.message}`);
+                    showError(`Connection failed: ${error.message}`);
                 }
             }
 
@@ -489,10 +489,10 @@ class SettingsPage(BasePage):
                     if (data.status === 'success') {
                         loadAnalysisTypes();
                     } else {
-                        alert('Error toggling analysis type: ' + data.error);
+                        showError('Error toggling analysis type: ' + data.error);
                     }
                 } catch (error) {
-                    alert('Error: ' + error.message);
+                    showError('Error: ' + error.message);
                 }
             }
 
@@ -506,10 +506,10 @@ class SettingsPage(BasePage):
                     if (data.status === 'success') {
                         loadAnalysisTypes();
                     } else {
-                        alert('Error deleting analysis type: ' + data.error);
+                        showError('Error deleting analysis type: ' + data.error);
                     }
                 } catch (error) {
-                    alert('Error: ' + error.message);
+                    showError('Error: ' + error.message);
                 }
             }
 
@@ -523,7 +523,9 @@ class SettingsPage(BasePage):
                     }
                     return [];
                 } catch (error) {
-                    console.error('Error fetching analysis types:', error);
+                    if (typeof DebugLogger !== 'undefined' && DebugLogger.enabled) {
+                        DebugLogger.log('Error fetching analysis types', {error: error.toString()});
+                    }
                     return [];
                 }
             }
@@ -534,7 +536,7 @@ class SettingsPage(BasePage):
                     const types = await fetchAnalysisTypes();
                     const basicType = types.find(t => t.id === id);
                     if (!basicType) {
-                        alert('Analysis type not found');
+                        showError('Analysis type not found');
                         return;
                     }
 
@@ -610,7 +612,7 @@ class SettingsPage(BasePage):
                     document.body.insertAdjacentHTML('beforeend', modalHTML);
 
                 } catch (error) {
-                    alert('Error loading analysis type: ' + error.message);
+                    showError('Error loading analysis type: ' + error.message);
                 }
             }
 
@@ -628,7 +630,7 @@ class SettingsPage(BasePage):
                 };
 
                 if (!updateData.display_name || !updateData.prompt_template) {
-                    alert('Display name and prompt template are required');
+                    showError('Display name and prompt template are required');
                     return;
                 }
 
@@ -643,12 +645,12 @@ class SettingsPage(BasePage):
                     if (data.status === 'success') {
                         document.getElementById(`edit-modal-${id}`).remove();
                         loadAnalysisTypes();
-                        alert('Analysis type updated successfully');
+                        showError('Analysis type updated successfully');
                     } else {
-                        alert('Error updating analysis type: ' + data.error);
+                        showError('Error updating analysis type: ' + data.error);
                     }
                 } catch (error) {
-                    alert('Error: ' + error.message);
+                    showError('Error: ' + error.message);
                 }
             }
 
@@ -671,7 +673,7 @@ class SettingsPage(BasePage):
                 };
 
                 if (!config.name || !config.display_name || !config.prompt_template) {
-                    alert('Please fill in all required fields');
+                    showError('Please fill in all required fields');
                     return;
                 }
 
@@ -689,10 +691,10 @@ class SettingsPage(BasePage):
                         document.getElementById('new-analysis-form').reset();
                         loadAnalysisTypes();
                     } else {
-                        alert('Error saving analysis type: ' + data.error);
+                        showError('Error saving analysis type: ' + data.error);
                     }
                 } catch (error) {
-                    alert('Error: ' + error.message);
+                    showError('Error: ' + error.message);
                 }
             }
 
@@ -822,12 +824,12 @@ class SettingsPage(BasePage):
 
         return f"""
             {emoji_picker_html}
-            <!-- Tab Navigation -->
+            <!-- Tab Navigation - Using server-side links to prevent hanging -->
             <div class="tabs">
-                <button class="tab-btn {'active' if tab == 'general' else ''}" onclick="switchTab('general')">General</button>
-                <button class="tab-btn {'active' if tab == 'setup' else ''}" onclick="switchTab('setup')">Setup</button>
-                <button class="tab-btn {'active' if tab == 'ai-config' else ''}" onclick="switchTab('ai-config')">AI Configuration</button>
-                <button class="tab-btn {'active' if tab == 'analysis-types' else ''}" onclick="switchTab('analysis-types')">AI Analysis Types</button>
+                <a href="/settings?tab=general" class="tab-btn {'active' if tab == 'general' else ''}">General</a>
+                <a href="/settings?tab=setup" class="tab-btn {'active' if tab == 'setup' else ''}">Setup</a>
+                <a href="/settings?tab=ai-config" class="tab-btn {'active' if tab == 'ai-config' else ''}">AI Configuration</a>
+                <a href="/settings?tab=analysis-types" class="tab-btn {'active' if tab == 'analysis-types' else ''}">AI Analysis Types</a>
             </div>
 
             <!-- General Tab -->
@@ -1117,14 +1119,10 @@ class SettingsPage(BasePage):
             {'<script>window.addEventListener("DOMContentLoaded", function() {{ setTimeout(function() {{ loadAnalysisTypes(); window.analysisTypesLoaded = true; }}, 100); }});</script>' if tab == 'analysis-types' else ''}
 
             <script>
-            // Handle browser back/forward buttons
-            window.addEventListener('popstate', function(event) {{
-                const params = new URLSearchParams(window.location.search);
-                const tab = params.get('tab') || 'general';
-                switchTab(tab);
-            }});
+            // Tab navigation is now handled by server-side links
+            // Browser back/forward buttons work naturally with URL changes
 
-            // Initialize correct tab on page load
+            // Initialize correct tab display on page load
             document.addEventListener('DOMContentLoaded', function() {{
                 const params = new URLSearchParams(window.location.search);
                 const currentTab = params.get('tab') || 'general';
@@ -1136,6 +1134,11 @@ class SettingsPage(BasePage):
                 const activeTab = document.getElementById(currentTab + '-tab');
                 if (activeTab) {{
                     activeTab.classList.add('active');
+                }}
+
+                // Debug logging if enabled
+                if (typeof DebugLogger !== 'undefined' && DebugLogger.enabled) {{
+                    DebugLogger.log('Settings page loaded', {{tab: currentTab}});
                 }}
             }});
 
