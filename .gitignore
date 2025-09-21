@@ -14,8 +14,7 @@ signal_bot.lock
 test_*.py
 ai_analysis_types_*.json
 
-# Old/deprecated files (still in repo but being phased out)
-manage.py
+# Old/deprecated files
 signal_service.py
 
 # Python cache and compiled files
