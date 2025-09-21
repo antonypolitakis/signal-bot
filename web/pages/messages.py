@@ -312,43 +312,23 @@ class MessagesPage(BasePage):
         # Convert datetime to strings for database
         date_mode = filters.get('date_mode', 'all')
 
-
         if filters.get('date'):
             # Specific date selected - use it directly
             start_date = filters['date']
             end_date = filters['date']
         elif date_mode == 'today':
             # For "Today" mode - always use the date from user's timezone
+            # Hours filter is ignored in 'today' mode - it always shows the entire day
             _, _, iso_date, _ = self.get_today_in_user_timezone()
-
-            if filters.get('hours', 0) > 0:
-                # With hours filter: show messages from last X hours
-                from datetime import datetime, timedelta
-                import pytz
-
-                # Use user's timezone for "now"
-                if user_timezone:
-                    try:
-                        tz = pytz.timezone(user_timezone)
-                        now = datetime.now(tz)
-                    except:
-                        now = datetime.now()
-                else:
-                    now = datetime.now()
-                start_time = now - timedelta(hours=filters['hours'])
-                start_date = start_time.strftime('%Y-%m-%d')
-                end_date = now.strftime('%Y-%m-%d')
-            else:
-                # Without hours filter: show all messages for today in user's timezone
-                start_date = iso_date
-                end_date = iso_date
-        elif date_mode == 'all' and filters.get('hours', 0) > 0:
-            # For "All Time" mode with hours filter: show ALL messages
-            # The hours filter is for display purposes only (hourly charts)
+            start_date = iso_date
+            end_date = iso_date
+        elif date_mode == 'all':
+            # For "All Time" mode - show all messages (hours filter can be used for charts)
+            # Hours filter doesn't affect which messages are shown, just the chart display
             start_date = None
             end_date = None
         else:
-            # No date filter - show all
+            # Fallback - show all
             start_date = None
             end_date = None
 
@@ -580,29 +560,10 @@ class MessagesPage(BasePage):
             end_date = filters['date']
         elif date_mode == 'today':
             # For "Today" mode - always use the date from user's timezone
+            # Hours filter is ignored in 'today' mode - it always shows the entire day
             _, _, iso_date, _ = self.get_today_in_user_timezone()
-
-            if filters.get('hours', 0) > 0:
-                # With hours filter: show messages from last X hours
-                from datetime import datetime, timedelta
-                import pytz
-
-                # Use user's timezone for "now"
-                if user_timezone:
-                    try:
-                        tz = pytz.timezone(user_timezone)
-                        now = datetime.now(tz)
-                    except:
-                        now = datetime.now()
-                else:
-                    now = datetime.now()
-                start_time = now - timedelta(hours=filters['hours'])
-                start_date = start_time.strftime('%Y-%m-%d')
-                end_date = now.strftime('%Y-%m-%d')
-            else:
-                # Without hours filter: show all messages for today in user's timezone
-                start_date = iso_date
-                end_date = iso_date
+            start_date = iso_date
+            end_date = iso_date
         elif date_mode == 'all' and filters.get('hours', 0) > 0:
             # For "All Time" mode with hours filter: show ALL messages
             # The hours filter is for display purposes only (hourly charts)
@@ -933,29 +894,10 @@ class MessagesPage(BasePage):
             end_date = filters['date']
         elif date_mode == 'today':
             # For "Today" mode - always use the date from user's timezone
+            # Hours filter is ignored in 'today' mode - it always shows the entire day
             _, _, iso_date, _ = self.get_today_in_user_timezone()
-
-            if filters.get('hours', 0) > 0:
-                # With hours filter: show messages from last X hours
-                from datetime import datetime, timedelta
-                import pytz
-
-                # Use user's timezone for "now"
-                if user_timezone:
-                    try:
-                        tz = pytz.timezone(user_timezone)
-                        now = datetime.now(tz)
-                    except:
-                        now = datetime.now()
-                else:
-                    now = datetime.now()
-                start_time = now - timedelta(hours=filters['hours'])
-                start_date = start_time.strftime('%Y-%m-%d')
-                end_date = now.strftime('%Y-%m-%d')
-            else:
-                # Without hours filter: show all messages for today in user's timezone
-                start_date = iso_date
-                end_date = iso_date
+            start_date = iso_date
+            end_date = iso_date
         elif date_mode == 'all' and filters.get('hours', 0) > 0:
             # For "All Time" mode with hours filter: this should show ALL messages
             # The hours filter will be applied differently (e.g., for hourly charts)
