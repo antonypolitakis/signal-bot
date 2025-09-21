@@ -17,9 +17,13 @@ import shutil
 import json
 import logging
 import logging.handlers
+import fcntl
+import errno
+import atexit
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Tuple
+from contextlib import contextmanager
 import psutil  # Will need to add to requirements.txt
 
 # Add project root to path
@@ -28,6 +32,161 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config.settings import Config
 from utils.common import format_file_size
 from models.database import DatabaseManager
+
+
+class ProcessLock:
+    """Process lock manager to ensure single instance execution."""
+
+    def __init__(self, lock_file='/tmp/signal_bot_manage.lock'):
+        self.lock_file = lock_file
+        self.lock_fd = None
+        self.acquired = False
+
+    def acquire(self, timeout=0):
+        """Acquire the lock with optional timeout.
+
+        Args:
+            timeout: Maximum time to wait for lock (0 = no wait)
+
+        Returns:
+            bool: True if lock acquired, False otherwise
+
+        Raises:
+            SystemExit: If another instance is running and no timeout
+        """
+        try:
+            # Open/create lock file
+            self.lock_fd = open(self.lock_file, 'w')
+
+            # Try to acquire exclusive lock
+            if timeout > 0:
+                # Try with timeout
+                start_time = time.time()
+                while time.time() - start_time < timeout:
+                    try:
+                        fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        self.acquired = True
+                        break
+                    except IOError as e:
+                        if e.errno not in (errno.EAGAIN, errno.EACCES):
+                            raise
+                        time.sleep(0.1)
+            else:
+                # Try immediate lock
+                try:
+                    fcntl.flock(self.lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    self.acquired = True
+                except IOError as e:
+                    if e.errno in (errno.EAGAIN, errno.EACCES):
+                        # Lock is held by another process
+                        self._handle_existing_lock()
+                        return False
+                    raise
+
+            if self.acquired:
+                # Write our PID to the lock file
+                self.lock_fd.write(str(os.getpid()))
+                self.lock_fd.flush()
+
+                # Register cleanup handlers
+                atexit.register(self.release)
+                signal.signal(signal.SIGTERM, self._signal_handler)
+                signal.signal(signal.SIGINT, self._signal_handler)
+
+                return True
+            else:
+                self._handle_existing_lock()
+                return False
+
+        except Exception as e:
+            print(f"\033[0;31mError acquiring lock: {e}\033[0m")
+            if self.lock_fd:
+                self.lock_fd.close()
+                self.lock_fd = None
+            return False
+
+    def _handle_existing_lock(self):
+        """Handle case where lock is already held."""
+        try:
+            # Try to read PID from existing lock file
+            with open(self.lock_file, 'r') as f:
+                pid = int(f.read().strip())
+
+            # Check if process is still running
+            if self._is_process_running(pid):
+                print(f"\033[0;31m❌ Another instance is already running (PID: {pid})\033[0m")
+                print(f"\033[1;33m   If this is incorrect, remove: {self.lock_file}\033[0m")
+                sys.exit(1)
+            else:
+                # Process is dead, we'll take over the lock on next attempt
+                print(f"\033[1;33m⚠ Stale lock detected (PID {pid} not running), cleaning up...\033[0m")
+                try:
+                    os.remove(self.lock_file)
+                except:
+                    pass
+        except (IOError, ValueError):
+            print(f"\033[0;31m❌ Another instance is running (lock file exists: {self.lock_file})\033[0m")
+            sys.exit(1)
+
+    def _is_process_running(self, pid):
+        """Check if a process with given PID is running."""
+        try:
+            # Send signal 0 to check if process exists
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+
+    def _signal_handler(self, signum, frame):
+        """Handle termination signals."""
+        self.release()
+        sys.exit(0)
+
+    def release(self):
+        """Release the lock."""
+        if self.lock_fd and self.acquired:
+            try:
+                fcntl.flock(self.lock_fd, fcntl.LOCK_UN)
+                self.lock_fd.close()
+                os.remove(self.lock_file)
+            except:
+                pass
+            finally:
+                self.lock_fd = None
+                self.acquired = False
+
+    def __enter__(self):
+        """Context manager entry."""
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.release()
+        return False
+
+
+@contextmanager
+def process_lock(lock_file='/tmp/signal_bot_manage.lock', skip_for_commands=None):
+    """Context manager for process locking.
+
+    Args:
+        lock_file: Path to lock file
+        skip_for_commands: List of commands that don't need locking
+    """
+    # Check if we should skip locking for this command
+    if skip_for_commands and len(sys.argv) > 1:
+        command = sys.argv[1]
+        if command in skip_for_commands:
+            yield
+            return
+
+    lock = ProcessLock(lock_file)
+    try:
+        lock.acquire()
+        yield lock
+    finally:
+        lock.release()
 
 
 class SignalBotManager:
@@ -825,7 +984,24 @@ def main():
     # Initialize manager
     manager = SignalBotManager()
 
-    # Execute command
+    # Commands that don't require locking
+    no_lock_commands = ['status', 'help', None]  # None for when no command is given
+
+    # Use process lock for all commands except status/help
+    if args.command not in no_lock_commands:
+        lock = ProcessLock()
+        if not lock.acquire():
+            sys.exit(1)
+        try:
+            execute_command(manager, args, parser)
+        finally:
+            lock.release()
+    else:
+        execute_command(manager, args, parser)
+
+
+def execute_command(manager, args, parser):
+    """Execute the specified command."""
     try:
         if args.command == 'start':
             manager.start(args.service, daemon_mode=args.daemon, debug=getattr(args, 'debug', False))
