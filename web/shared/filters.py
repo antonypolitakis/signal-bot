@@ -250,9 +250,9 @@ class GlobalFilterSystem:
 
                 if (filters.dateMode === 'specific' && filters.date) {
                     params.set('date', filters.date);
-                } else if (filters.dateMode === 'today') {
-                    params.set('date', new Date().toISOString().split('T')[0]);
                 }
+                // Note: When date_mode is 'today', we don't set a date parameter
+                // The server will calculate today's date based on user's timezone
 
                 // Only set hours if not "All Time" (0)
                 if (filters.hours && filters.hours !== 0) {
@@ -319,10 +319,8 @@ class GlobalFilterSystem:
                     }
                 } else {
                     dateInput.style.display = 'none';
-                    if (mode === 'all') {
-                        dateInput.value = ''; // Clear date for "all dates"
-                    } else if (mode === 'today') {
-                        dateInput.value = new Date().toISOString().split('T')[0];
+                    if (mode === 'all' || mode === 'today') {
+                        dateInput.value = ''; // Clear date for "all dates" and "today"
                     }
                 }
             },
@@ -333,10 +331,39 @@ class GlobalFilterSystem:
                 const params = new URLSearchParams(window.location.search);
 
                 // Restore filter values from URL if they exist
+                if (params.has('group_id')) {
+                    const groupSelect = document.getElementById('global-group-filter');
+                    if (groupSelect) {
+                        groupSelect.value = params.get('group_id');
+                    }
+                }
+
+                if (params.has('sender_id')) {
+                    const senderSelect = document.getElementById('global-sender-filter');
+                    if (senderSelect) {
+                        senderSelect.value = params.get('sender_id');
+                    }
+                }
+
                 if (params.has('hours')) {
                     const hoursSelect = document.getElementById('global-hours-filter');
                     if (hoursSelect) {
                         hoursSelect.value = params.get('hours');
+                    }
+                }
+
+                if (params.has('attachments_only') && params.get('attachments_only') === 'true') {
+                    const attachmentsCheck = document.getElementById('global-attachments-only');
+                    if (attachmentsCheck) {
+                        attachmentsCheck.checked = true;
+                    }
+                }
+
+                // Restore date if it's a specific date
+                if (params.has('date') && params.get('date_mode') === 'specific') {
+                    const dateInput = document.getElementById('global-date');
+                    if (dateInput) {
+                        dateInput.value = params.get('date');
                     }
                 }
 
