@@ -104,38 +104,102 @@ class MessagesPage(BasePage):
                 }
 
                 function switchTab(newTab) {
-                    // Prevent multiple rapid clicks
+                    const timestamp = Date.now();
+                    console.log(`[${timestamp}] switchTab called for: ${newTab}`);
+
+                    // Prevent multiple rapid clicks with better debouncing
                     if (window.switchTabInProgress) {
-                        return;
+                        console.log(`[${timestamp}] Tab switch already in progress, ignoring click`);
+                        return false;
                     }
+
+                    // Also check if we just switched tabs recently (within 500ms)
+                    const now = Date.now();
+                    if (window.lastTabSwitch && (now - window.lastTabSwitch) < 500) {
+                        console.log(`[${timestamp}] Too soon since last switch (${now - window.lastTabSwitch}ms), ignoring`);
+                        return false;
+                    }
+
                     window.switchTabInProgress = true;
+                    window.lastTabSwitch = now;
 
-                    // Keep current filters when switching tabs
-                    const filters = GlobalFilters.getValues();
-                    const newUrl = new URL('/messages', window.location.origin);
-                    newUrl.searchParams.set('tab', newTab);
+                    console.log(`[${timestamp}] Starting tab switch to ${newTab}`);
 
-                    if (filters.groupId) newUrl.searchParams.set('group_id', filters.groupId);
-                    if (filters.senderId) newUrl.searchParams.set('sender_id', filters.senderId);
-                    if (filters.hours) newUrl.searchParams.set('hours', filters.hours);
-                    if (filters.attachmentsOnly) newUrl.searchParams.set('attachments_only', 'true');
+                    try {
+                        // Keep current filters when switching tabs
+                        console.log(`[${timestamp}] Getting filter values...`);
+                        const filters = GlobalFilters.getValues();
+                        console.log(`[${timestamp}] Filters retrieved:`, filters);
 
-                    // Handle date based on mode
-                    if (filters.dateMode === 'today') {
-                        // Use server-side calculated today (respects user timezone preference)
-                        // This is just for URL, server will recalculate properly
-                        newUrl.searchParams.set('date_mode', 'today');
-                    } else if (filters.dateMode === 'specific' && filters.date) {
-                        newUrl.searchParams.set('date', filters.date);
-                        newUrl.searchParams.set('date_mode', 'specific');
-                    } else {
-                        newUrl.searchParams.set('date_mode', 'all');
+                        const newUrl = new URL('/messages', window.location.origin);
+                        newUrl.searchParams.set('tab', newTab);
+
+                        if (filters.groupId) newUrl.searchParams.set('group_id', filters.groupId);
+                        if (filters.senderId) newUrl.searchParams.set('sender_id', filters.senderId);
+                        if (filters.hours) newUrl.searchParams.set('hours', filters.hours);
+                        if (filters.attachmentsOnly) newUrl.searchParams.set('attachments_only', 'true');
+
+                        // Handle date based on mode
+                        if (filters.dateMode === 'today') {
+                            newUrl.searchParams.set('date_mode', 'today');
+                        } else if (filters.dateMode === 'specific' && filters.date) {
+                            newUrl.searchParams.set('date', filters.date);
+                            newUrl.searchParams.set('date_mode', 'specific');
+                        } else {
+                            newUrl.searchParams.set('date_mode', 'all');
+                        }
+
+                        console.log(`[${timestamp}] Navigating to:`, newUrl.toString());
+
+                        // Store the URL we're navigating to
+                        window.pendingNavigation = newUrl.toString();
+
+                        // Add timeout to reset the flag if navigation fails
+                        setTimeout(() => {
+                            if (window.switchTabInProgress) {
+                                console.log(`[${timestamp}] Navigation timeout - resetting flag`);
+                                window.switchTabInProgress = false;
+                                window.pendingNavigation = null;
+                            }
+                        }, 3000);
+
+                        // Use a small delay to consolidate rapid clicks
+                        setTimeout(() => {
+                            // Only navigate if this is still the pending navigation
+                            if (window.pendingNavigation === newUrl.toString()) {
+                                console.log(`[${timestamp}] Executing navigation to:`, window.pendingNavigation);
+                                window.location.href = window.pendingNavigation;
+                            } else {
+                                console.log(`[${timestamp}] Navigation cancelled - newer navigation pending`);
+                                window.switchTabInProgress = false;
+                            }
+                        }, 100);
+                    } catch (error) {
+                        console.error(`[${timestamp}] Error in switchTab:`, error);
+                        window.switchTabInProgress = false;
                     }
 
-                    // Use replace instead of href to avoid adding to browser history
-                    window.location.replace(newUrl.toString());
+                    return false;
                 }
 
+
+                // Add event listener approach as backup
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Attach click handlers to all tab links
+                    const tabLinks = document.querySelectorAll('.tab-btn');
+                    tabLinks.forEach(link => {
+                        link.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const tabName = this.getAttribute('data-tab');
+                            if (tabName) {
+                                console.log(`Event listener triggered for tab: ${tabName}`);
+                                switchTab(tabName);
+                            }
+                            return false;
+                        });
+                    });
+                });
 
                 // Initialize default tab
                 document.addEventListener('DOMContentLoaded', function() {
@@ -218,6 +282,13 @@ class MessagesPage(BasePage):
     def render_content(self, query: Dict[str, Any]) -> str:
         tab = query.get('tab', ['groups'])[0]
 
+        # Debug logging for tab requests
+        import logging
+        import time
+        request_time = time.time()
+        logging.info(f"[MESSAGES PAGE] Tab request: {tab} at {request_time}")
+        logging.debug(f"[MESSAGES PAGE] Full query params: {query}")
+
         # Render different tab contents based on tab parameter
         if tab == 'groups':
             content = self._render_groups_tab(query)
@@ -229,6 +300,8 @@ class MessagesPage(BasePage):
             content = self._render_ai_analysis_tab(query)
         else:
             content = self._render_groups_tab(query)
+
+        logging.info(f"[MESSAGES PAGE] Tab {tab} rendered in {time.time() - request_time:.2f}s")
 
         # Generate global filters
         global_filters = self._render_global_filters(query)
@@ -253,10 +326,10 @@ class MessagesPage(BasePage):
             {global_filters}
 
             <div class="tabs">
-                <a href="#" onclick="switchTab('groups'); return false;" class="tab-btn {'active' if tab == 'groups' else ''}">By Group</a>
-                <a href="#" onclick="switchTab('senders'); return false;" class="tab-btn {'active' if tab == 'senders' else ''}">By Sender</a>
-                <a href="#" onclick="switchTab('all'); return false;" class="tab-btn {'active' if tab == 'all' else ''}">All Messages</a>
-                <a href="#" onclick="switchTab('ai-analysis'); return false;" class="tab-btn {'active' if tab == 'ai-analysis' else ''}">AI Analysis</a>
+                <a href="#" onclick="return switchTab('groups');" class="tab-btn {'active' if tab == 'groups' else ''}" data-tab="groups">By Group</a>
+                <a href="#" onclick="return switchTab('senders');" class="tab-btn {'active' if tab == 'senders' else ''}" data-tab="senders">By Sender</a>
+                <a href="#" onclick="return switchTab('all');" class="tab-btn {'active' if tab == 'all' else ''}" data-tab="all">All Messages</a>
+                <a href="#" onclick="return switchTab('ai-analysis');" class="tab-btn {'active' if tab == 'ai-analysis' else ''}" data-tab="ai-analysis">AI Analysis</a>
             </div>
 
             <div id="{tab}-tab" class="tab-content active">
