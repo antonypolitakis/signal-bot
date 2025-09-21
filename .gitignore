@@ -8,6 +8,15 @@
 signal_bot.db
 signal_bot_debug.log
 malloc_trace.log
+signal_bot.lock
+
+# Test and temporary data files
+test_*.py
+ai_analysis_types_*.json
+
+# Old/deprecated files (still in repo but being phased out)
+manage.py
+signal_service.py
 
 # Python cache and compiled files
 __pycache__/
@@ -27,6 +36,7 @@ ENV/
 *~
 .*.swp
 .*.swo
+*.orig
 
 # IDE files
 .vscode/
@@ -61,4 +71,4 @@ coverage.xml
 # Distribution
 dist/
 build/
-*.egg-info/signal_bot.lock
+*.egg-info/
