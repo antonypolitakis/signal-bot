@@ -919,6 +919,9 @@ class MessagesPage(BasePage):
         sender_filter = filters.get('sender_id')  # Note: using sender_id now
         attachments_only = filters.get('attachments_only', False)
 
+        # Get user timezone early - needed for date calculations
+        user_timezone = self.get_user_timezone(query)
+
         # Get date range from filters using centralized logic
         # Convert datetime to strings for database
         date_mode = filters.get('date_mode', 'all')
@@ -927,23 +930,31 @@ class MessagesPage(BasePage):
             # Specific date selected - use it directly
             start_date = filters['date']
             end_date = filters['date']
-        elif date_mode == 'today' and filters.get('hours', 0) > 0:
-            # For "Today" mode with hours filter: show messages from last X hours
-            from datetime import datetime, timedelta
-            import pytz
+        elif date_mode == 'today':
+            # For "Today" mode - always use the date from user's timezone
+            _, _, iso_date, _ = self.get_today_in_user_timezone()
 
-            # Use user's timezone for "now"
-            if user_timezone:
-                try:
-                    tz = pytz.timezone(user_timezone)
-                    now = datetime.now(tz)
-                except:
+            if filters.get('hours', 0) > 0:
+                # With hours filter: show messages from last X hours
+                from datetime import datetime, timedelta
+                import pytz
+
+                # Use user's timezone for "now"
+                if user_timezone:
+                    try:
+                        tz = pytz.timezone(user_timezone)
+                        now = datetime.now(tz)
+                    except:
+                        now = datetime.now()
+                else:
                     now = datetime.now()
+                start_time = now - timedelta(hours=filters['hours'])
+                start_date = start_time.strftime('%Y-%m-%d')
+                end_date = now.strftime('%Y-%m-%d')
             else:
-                now = datetime.now()
-            start_time = now - timedelta(hours=filters['hours'])
-            start_date = start_time.strftime('%Y-%m-%d')
-            end_date = now.strftime('%Y-%m-%d')
+                # Without hours filter: show all messages for today in user's timezone
+                start_date = iso_date
+                end_date = iso_date
         elif date_mode == 'all' and filters.get('hours', 0) > 0:
             # For "All Time" mode with hours filter: this should show ALL messages
             # The hours filter will be applied differently (e.g., for hourly charts)
@@ -956,7 +967,6 @@ class MessagesPage(BasePage):
             end_date = None
 
         # Get messages using database filtering
-        user_timezone = self.get_user_timezone(query)
         try:
             messages = self.db.get_messages_by_group_with_names_filtered(
                 group_id=group_filter,
