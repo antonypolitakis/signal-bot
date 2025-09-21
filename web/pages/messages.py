@@ -316,13 +316,31 @@ class MessagesPage(BasePage):
             # Specific date selected - use it directly
             start_date = filters['date']
             end_date = filters['date']
-        elif date_mode == 'today' and filters.get('hours', 0) > 0:
-            # For "Today" mode with hours filter: show messages from last X hours
-            from datetime import datetime, timedelta
-            now = datetime.now()
-            start_time = now - timedelta(hours=filters['hours'])
-            start_date = start_time.strftime('%Y-%m-%d')
-            end_date = now.strftime('%Y-%m-%d')
+        elif date_mode == 'today':
+            # For "Today" mode - always use the date from user's timezone
+            _, _, iso_date, _ = self.get_today_in_user_timezone()
+
+            if filters.get('hours', 0) > 0:
+                # With hours filter: show messages from last X hours
+                from datetime import datetime, timedelta
+                import pytz
+
+                # Use user's timezone for "now"
+                if user_timezone:
+                    try:
+                        tz = pytz.timezone(user_timezone)
+                        now = datetime.now(tz)
+                    except:
+                        now = datetime.now()
+                else:
+                    now = datetime.now()
+                start_time = now - timedelta(hours=filters['hours'])
+                start_date = start_time.strftime('%Y-%m-%d')
+                end_date = now.strftime('%Y-%m-%d')
+            else:
+                # Without hours filter: show all messages for today in user's timezone
+                start_date = iso_date
+                end_date = iso_date
         elif date_mode == 'all' and filters.get('hours', 0) > 0:
             # For "All Time" mode with hours filter: show ALL messages
             # The hours filter is for display purposes only (hourly charts)
@@ -559,13 +577,31 @@ class MessagesPage(BasePage):
             # Specific date selected - use it directly
             start_date = filters['date']
             end_date = filters['date']
-        elif date_mode == 'today' and filters.get('hours', 0) > 0:
-            # For "Today" mode with hours filter: show messages from last X hours
-            from datetime import datetime, timedelta
-            now = datetime.now()
-            start_time = now - timedelta(hours=filters['hours'])
-            start_date = start_time.strftime('%Y-%m-%d')
-            end_date = now.strftime('%Y-%m-%d')
+        elif date_mode == 'today':
+            # For "Today" mode - always use the date from user's timezone
+            _, _, iso_date, _ = self.get_today_in_user_timezone()
+
+            if filters.get('hours', 0) > 0:
+                # With hours filter: show messages from last X hours
+                from datetime import datetime, timedelta
+                import pytz
+
+                # Use user's timezone for "now"
+                if user_timezone:
+                    try:
+                        tz = pytz.timezone(user_timezone)
+                        now = datetime.now(tz)
+                    except:
+                        now = datetime.now()
+                else:
+                    now = datetime.now()
+                start_time = now - timedelta(hours=filters['hours'])
+                start_date = start_time.strftime('%Y-%m-%d')
+                end_date = now.strftime('%Y-%m-%d')
+            else:
+                # Without hours filter: show all messages for today in user's timezone
+                start_date = iso_date
+                end_date = iso_date
         elif date_mode == 'all' and filters.get('hours', 0) > 0:
             # For "All Time" mode with hours filter: show ALL messages
             # The hours filter is for display purposes only (hourly charts)
@@ -894,7 +930,17 @@ class MessagesPage(BasePage):
         elif date_mode == 'today' and filters.get('hours', 0) > 0:
             # For "Today" mode with hours filter: show messages from last X hours
             from datetime import datetime, timedelta
-            now = datetime.now()
+            import pytz
+
+            # Use user's timezone for "now"
+            if user_timezone:
+                try:
+                    tz = pytz.timezone(user_timezone)
+                    now = datetime.now(tz)
+                except:
+                    now = datetime.now()
+            else:
+                now = datetime.now()
             start_time = now - timedelta(hours=filters['hours'])
             start_date = start_time.strftime('%Y-%m-%d')
             end_date = now.strftime('%Y-%m-%d')

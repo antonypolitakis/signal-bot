@@ -380,9 +380,11 @@ class GlobalFilterSystem:
         date = query.get('date', [''])[0] if 'date' in query else None
 
         # If date_mode is 'today' but no date is provided, use today's date as string
+        # NOTE: This should ideally use the user's timezone, but since we don't have
+        # database access here, the page handler needs to handle this correctly
         if date_mode == 'today' and not date:
-            from datetime import date as date_type
-            date = date_type.today().isoformat()  # Always returns a string
+            # Don't set a date here - let the page handler use the user's timezone
+            date = None
 
         # Get hours filter, but set to 0 if specific date is selected
         hours = int(query.get('hours', [str(DEFAULTS['FILTER_HOURS'])])[0]) if 'hours' in query else DEFAULTS['FILTER_HOURS']
