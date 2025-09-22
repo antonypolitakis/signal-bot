@@ -15,12 +15,6 @@ import threading
 import uuid
 import time
 
-# Try to import markdown library, fallback if not available
-try:
-    import markdown
-    MARKDOWN_AVAILABLE = True
-except ImportError:
-    MARKDOWN_AVAILABLE = False
 import os
 import mimetypes
 
@@ -39,20 +33,6 @@ from .pages.settings import SettingsPage
 from .pages.setup import SetupPage
 from .pages.ai_config import AIConfigPage
 from .pages.ai_analysis import AIAnalysisPage
-
-
-def convert_markdown_to_html(text: str) -> str:
-    """Convert markdown text to HTML using Python markdown library."""
-    if not MARKDOWN_AVAILABLE or not text:
-        return text
-
-    try:
-        # Configure markdown with table extension
-        md = markdown.Markdown(extensions=['tables', 'fenced_code'])
-        return md.convert(text)
-    except Exception:
-        # Fallback to original text if conversion fails
-        return text
 
 
 class ModularWebServer:
@@ -412,7 +392,9 @@ class ModularWebServer:
                     self._send_json_response(preferences)
                 elif path == '/api/dashboard/comprehensive':
                     # Handle dashboard comprehensive API endpoint
-                    user_timezone = query.get('timezone', ['Asia/Tokyo'])[0]
+                    prefs_service = UserPreferencesService(web_server.db)
+                    default_timezone = prefs_service.get_timezone()
+                    user_timezone = query.get('timezone', [default_timezone])[0]
                     dashboard_data = web_server.pages['dashboard'].get_dashboard_data(user_timezone)
                     self._send_json_response(dashboard_data)
                 else:
@@ -765,15 +747,30 @@ class ModularWebServer:
                         return
 
                     # Get user's timezone and date using existing method
-                    user_timezone = query.get('timezone', [None])[0] or 'Asia/Tokyo'  # Default timezone
+                    prefs_service = UserPreferencesService(web_server.db)
+                    default_timezone = prefs_service.get_timezone()
+                    user_timezone = query.get('timezone', [None])[0] or default_timezone  # Default timezone
                     user_date_str = query.get('date', [None])[0]
 
                     if user_date_str:
                         from datetime import datetime
                         user_date = datetime.strptime(user_date_str, '%Y-%m-%d').date()
                     else:
-                        from datetime import date
-                        user_date = date.today()
+                        # Get today's date in user's timezone
+                        from datetime import datetime
+                        import pytz
+                        prefs_service = UserPreferencesService(web_server.db)
+                        user_timezone = prefs_service.get_timezone()
+                        if user_timezone and user_timezone != 'UTC':
+                            try:
+                                tz = pytz.timezone(user_timezone)
+                                user_date = datetime.now(tz).date()
+                            except:
+                                from datetime import date
+                                user_date = date.today()
+                        else:
+                            from datetime import date
+                            user_date = date.today()
 
                     # Get group info
                     group = web_server.db.get_group(group_id)
@@ -820,9 +817,26 @@ class ModularWebServer:
 
                                 if row:
                                     from datetime import datetime
+                                    import pytz
+
+                                    # Convert created_at to user timezone
+                                    created_at_str = row['created_at']
+                                    # Parse database timestamp (assumed to be in UTC or server time)
+                                    created_dt = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
+                                    # Make it timezone aware (UTC)
+                                    created_dt = pytz.UTC.localize(created_dt)
+
+                                    # Convert to user timezone
+                                    if user_timezone and user_timezone != 'UTC':
+                                        try:
+                                            user_tz = pytz.timezone(user_timezone)
+                                            created_dt = created_dt.astimezone(user_tz)
+                                        except:
+                                            pass
+
                                     cached_info = {
                                         'has_cached': True,
-                                        'analyzed_at': row['created_at'],
+                                        'analyzed_at': created_dt.isoformat(),
                                         'cached_message_count': row['message_count']
                                     }
 
@@ -882,14 +896,29 @@ class ModularWebServer:
                         return
 
                     # Get user's timezone and date using existing method
-                    user_timezone = query.get('timezone', [None])[0] or 'Asia/Tokyo'  # Default timezone
+                    prefs_service = UserPreferencesService(web_server.db)
+                    default_timezone = prefs_service.get_timezone()
+                    user_timezone = query.get('timezone', [None])[0] or default_timezone  # Default timezone
                     user_date_str = query.get('date', [None])[0]
                     if user_date_str:
                         from datetime import datetime
                         user_date = datetime.strptime(user_date_str, '%Y-%m-%d').date()
                     else:
-                        from datetime import date
-                        user_date = date.today()
+                        # Get today's date in user's timezone
+                        from datetime import datetime
+                        import pytz
+                        prefs_service = UserPreferencesService(web_server.db)
+                        user_timezone = prefs_service.get_timezone()
+                        if user_timezone and user_timezone != 'UTC':
+                            try:
+                                tz = pytz.timezone(user_timezone)
+                                user_date = datetime.now(tz).date()
+                            except:
+                                from datetime import date
+                                user_date = date.today()
+                        else:
+                            from datetime import date
+                            user_date = date.today()
 
                     # Try to get cached result
                     cached_result = web_server.db.get_sentiment_analysis(group_id, user_date)
@@ -949,12 +978,35 @@ class ModularWebServer:
                             # Fallback for results without header separation
                             combined_result = convert_markdown_to_html(cached_result)
 
+                        # Convert timestamp to user timezone
+                        analyzed_timestamp = None
+                        if row and row['created_at']:
+                            from datetime import datetime
+                            import pytz
+
+                            # Parse database timestamp
+                            created_dt = datetime.strptime(row['created_at'], '%Y-%m-%d %H:%M:%S')
+                            # Make it timezone aware (UTC)
+                            created_dt = pytz.UTC.localize(created_dt)
+
+                            # Convert to user timezone
+                            prefs_service = UserPreferencesService(web_server.db)
+                            user_timezone = prefs_service.get_timezone()
+                            if user_timezone and user_timezone != 'UTC':
+                                try:
+                                    user_tz = pytz.timezone(user_timezone)
+                                    created_dt = created_dt.astimezone(user_tz)
+                                except:
+                                    pass
+
+                            analyzed_timestamp = created_dt.isoformat()
+
                         self._send_json_response({
                             'status': 'success',
                             'cached': True,
                             'result': {
                                 'analysis': combined_result,
-                                'analyzed_at': row['created_at'] if row else None,
+                                'analyzed_at': analyzed_timestamp,
                                 'message_count': row['message_count'] if row else 0
                             }
                         })
@@ -992,7 +1044,9 @@ class ModularWebServer:
                     force_refresh = query.get('force', [False])[0] == 'true'
 
                     # Get timezone and date from client using existing method
-                    user_timezone = query.get('timezone', [None])[0] or 'Asia/Tokyo'  # Default timezone
+                    prefs_service = UserPreferencesService(web_server.db)
+                    default_timezone = prefs_service.get_timezone()
+                    user_timezone = query.get('timezone', [None])[0] or default_timezone  # Default timezone
                     user_date_str = query.get('date', [None])[0]
 
                     # Parse user's date
@@ -1001,11 +1055,33 @@ class ModularWebServer:
                             from datetime import datetime
                             user_date = datetime.strptime(user_date_str, '%Y-%m-%d').date()
                         except ValueError:
+                            # Get today's date in user's timezone
+                            from datetime import datetime
+                            import pytz
+                            if user_timezone and user_timezone != 'UTC':
+                                try:
+                                    tz = pytz.timezone(user_timezone)
+                                    user_date = datetime.now(tz).date()
+                                except:
+                                    from datetime import date
+                                    user_date = date.today()
+                            else:
+                                from datetime import date
+                                user_date = date.today()
+                    else:
+                        # Get today's date in user's timezone
+                        from datetime import datetime
+                        import pytz
+                        if user_timezone and user_timezone != 'UTC':
+                            try:
+                                tz = pytz.timezone(user_timezone)
+                                user_date = datetime.now(tz).date()
+                            except:
+                                from datetime import date
+                                user_date = date.today()
+                        else:
                             from datetime import date
                             user_date = date.today()
-                    else:
-                        from datetime import date
-                        user_date = date.today()
 
                     # Create a unique job ID
                     job_id = str(uuid.uuid4())
@@ -1182,7 +1258,9 @@ class ModularWebServer:
                         return
 
                     # Get user's timezone
-                    user_timezone = query.get('timezone', [None])[0] or 'Asia/Tokyo'
+                    prefs_service = UserPreferencesService(web_server.db)
+                    default_timezone = prefs_service.get_timezone()
+                    user_timezone = query.get('timezone', [None])[0] or default_timezone
 
                     # Use centralized date range function (handles timezone properly)
                     start_date, end_date = get_date_range_from_filters(filters)
@@ -1201,6 +1279,7 @@ class ModularWebServer:
                             user_date = datetime.now(tz).date()
                             user_date_str = user_date.isoformat()
                         except (ImportError, Exception):
+                            # Fallback to server date if timezone conversion fails
                             from datetime import date
                             user_date = date.today()
                             user_date_str = user_date.isoformat()
@@ -1263,7 +1342,9 @@ class ModularWebServer:
                         return
 
                     # Get user's timezone and date
-                    user_timezone = query.get('timezone', [None])[0] or 'Asia/Tokyo'
+                    prefs_service = UserPreferencesService(web_server.db)
+                    default_timezone = prefs_service.get_timezone()
+                    user_timezone = query.get('timezone', [None])[0] or default_timezone
                     user_date_str = query.get('date', [None])[0]
                     hours = int(query.get('hours', [24])[0])
 
@@ -1271,8 +1352,21 @@ class ModularWebServer:
                         from datetime import datetime
                         user_date = datetime.strptime(user_date_str, '%Y-%m-%d').date()
                     else:
-                        from datetime import date
-                        user_date = date.today()
+                        # Get today's date in user's timezone
+                        from datetime import datetime
+                        import pytz
+                        prefs_service = UserPreferencesService(web_server.db)
+                        user_timezone = prefs_service.get_timezone()
+                        if user_timezone and user_timezone != 'UTC':
+                            try:
+                                tz = pytz.timezone(user_timezone)
+                                user_date = datetime.now(tz).date()
+                            except:
+                                from datetime import date
+                                user_date = date.today()
+                        else:
+                            from datetime import date
+                            user_date = date.today()
 
                     # Try to get cached result
                     cached_result = web_server.db.get_summary_analysis(group_id, user_date, hours)
@@ -1354,16 +1448,42 @@ class ModularWebServer:
 
                     # Get the user date string for the summarizer
                     if filters['date_mode'] == 'today':
-                        from datetime import date
-                        user_date = date.today()
+                        # Get today's date in user's timezone
+                        from datetime import datetime
+                        import pytz
+                        prefs_service = UserPreferencesService(web_server.db)
+                        user_timezone = prefs_service.get_timezone()
+                        if user_timezone and user_timezone != 'UTC':
+                            try:
+                                tz = pytz.timezone(user_timezone)
+                                user_date = datetime.now(tz).date()
+                            except:
+                                from datetime import date
+                                user_date = date.today()
+                        else:
+                            from datetime import date
+                            user_date = date.today()
                         user_date_str = user_date.isoformat()
                     elif filters['date']:
                         user_date_str = filters['date']
                         from datetime import datetime
                         user_date = datetime.strptime(user_date_str, '%Y-%m-%d').date()
                     else:
-                        from datetime import date
-                        user_date = date.today()
+                        # Get today's date in user's timezone
+                        from datetime import datetime
+                        import pytz
+                        prefs_service = UserPreferencesService(web_server.db)
+                        user_timezone = prefs_service.get_timezone()
+                        if user_timezone and user_timezone != 'UTC':
+                            try:
+                                tz = pytz.timezone(user_timezone)
+                                user_date = datetime.now(tz).date()
+                            except:
+                                from datetime import date
+                                user_date = date.today()
+                        else:
+                            from datetime import date
+                            user_date = date.today()
                         user_date_str = user_date.isoformat()
 
                     # Allow summary without group if sender is provided
@@ -1658,7 +1778,8 @@ class ModularWebServer:
                     stats = {}
 
                     # Get user timezone from query
-                    user_timezone = 'Asia/Tokyo'
+                    prefs_service = UserPreferencesService(web_server.db)
+                    user_timezone = prefs_service.get_timezone()
                     if query:
                         timezone_param = query.get('timezone', [None])[0]
                         if timezone_param:
@@ -1980,6 +2101,109 @@ class ModularWebServer:
                     group = web_server.db.get_group(group_id) if group_id else None
                     group_name = group.group_name if group else 'Unknown'
 
+                    # Check for cached results first (using generic cache for ALL analysis types)
+                    force_refresh = query.get('force', ['false'])[0] == 'true'
+                    cached_entry = None
+
+                    if not force_refresh:
+                        # Parse dates for cache lookup
+                        from datetime import datetime
+                        analysis_date = None
+                        date_range_start = None
+                        date_range_end = None
+
+                        if date_str:
+                            analysis_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+
+                        if start_date_str:
+                            date_range_start = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+
+                        if end_date_str:
+                            date_range_end = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+                        # Try generic cache first for all analysis types
+                        cached_entry = web_server.db.get_ai_analysis_cache(
+                            analysis_type=analysis_type,
+                            group_id=group_id,
+                            sender_uuid=sender_id,
+                            analysis_date=analysis_date,
+                            date_range_start=date_range_start,
+                            date_range_end=date_range_end,
+                            hours=hours,
+                            attachments_only=attachments_only
+                        )
+
+                        # Fall back to legacy cache for sentiment/summary
+                        if not cached_entry and analysis_type in ['sentiment', 'summary']:
+                            if analysis_type == 'sentiment' and date_str and group_id:
+                                legacy_result = web_server.db.get_sentiment_analysis(group_id, analysis_date)
+                                if legacy_result:
+                                    # Get metadata from legacy table
+                                    with web_server.db._get_connection() as conn:
+                                        cursor = conn.cursor()
+                                        cursor.execute("""
+                                            SELECT created_at, message_count FROM sentiment_analysis
+                                            WHERE group_id = ? AND analysis_date = ?
+                                        """, (group_id, date_str))
+                                        metadata = cursor.fetchone()
+                                        if metadata:
+                                            cached_entry = {
+                                                'analysis_result': legacy_result,
+                                                'message_count': metadata['message_count'],
+                                                'created_at': metadata['created_at'],
+                                                'ai_provider': None,
+                                                'is_local_ai': False
+                                            }
+                            elif analysis_type == 'summary' and date_str and group_id:
+                                legacy_result = web_server.db.get_summary_analysis(group_id, analysis_date, hours)
+                                if legacy_result:
+                                    # Get metadata from legacy table
+                                    with web_server.db._get_connection() as conn:
+                                        cursor = conn.cursor()
+                                        cursor.execute("""
+                                            SELECT created_at, message_count, is_local_ai FROM summary_analysis
+                                            WHERE group_id = ? AND analysis_date = ? AND hours = ?
+                                        """, (group_id, date_str, hours))
+                                        metadata = cursor.fetchone()
+                                        if metadata:
+                                            cached_entry = {
+                                                'analysis_result': legacy_result,
+                                                'message_count': metadata['message_count'],
+                                                'created_at': metadata['created_at'],
+                                                'ai_provider': None,
+                                                'is_local_ai': metadata.get('is_local_ai', False)
+                                            }
+
+                    # If we have cached result, return it immediately
+                    if cached_entry:
+                        from datetime import datetime
+                        import pytz
+
+                        # Convert timestamp to user timezone
+                        created_dt = datetime.strptime(cached_entry['created_at'], '%Y-%m-%d %H:%M:%S')
+                        created_dt = pytz.UTC.localize(created_dt)
+
+                        if user_timezone and user_timezone != 'UTC':
+                            try:
+                                user_tz = pytz.timezone(user_timezone)
+                                created_dt = created_dt.astimezone(user_tz)
+                            except:
+                                pass
+
+                        # The cached result is already HTML-converted
+                        self._send_json_response({
+                            'status': 'success',
+                            'cached': True,
+                            'cache_type': 'generic' if 'ai_provider' in cached_entry else 'legacy',
+                            'analysis_type': analysis_type,
+                            'result': cached_entry['analysis_result'],
+                            'analyzed_at': created_dt.isoformat(),
+                            'message_count': cached_entry['message_count'],
+                            'ai_provider': cached_entry.get('ai_provider'),
+                            'is_local': cached_entry.get('is_local_ai', False)
+                        })
+                        return
+
                     if async_mode:
                         # Create job ID
                         job_id = str(uuid.uuid4())
@@ -2007,6 +2231,49 @@ class ModularWebServer:
                                 if result and result.get('status') == 'success':
                                     web_server._analysis_jobs[job_id]['status'] = 'completed'
                                     web_server._analysis_jobs[job_id]['result'] = result
+
+                                    # Save to cache for ALL analysis types
+                                    from datetime import datetime
+                                    analysis_date = None
+                                    date_range_start = None
+                                    date_range_end = None
+
+                                    if date_str:
+                                        analysis_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                                    if start_date_str:
+                                        date_range_start = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                                    if end_date_str:
+                                        date_range_end = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+                                    # Store in generic cache for all analysis types
+                                    web_server.db.store_ai_analysis_cache(
+                                        analysis_type=analysis_type,
+                                        analysis_result=result.get('result', ''),
+                                        message_count=len(messages),
+                                        group_id=group_id,
+                                        sender_uuid=sender_id,
+                                        analysis_date=analysis_date,
+                                        date_range_start=date_range_start,
+                                        date_range_end=date_range_end,
+                                        hours=hours,
+                                        attachments_only=attachments_only,
+                                        ai_provider=result.get('ai_provider'),
+                                        is_local_ai=result.get('is_local', False)
+                                    )
+
+                                    # Also store in legacy tables for backward compatibility
+                                    if analysis_type == 'sentiment' and date_str and group_id:
+                                        web_server.db.store_sentiment_analysis(
+                                            group_id, analysis_date, len(messages),
+                                            result.get('result', ''),
+                                            is_local_ai=result.get('is_local', False)
+                                        )
+                                    elif analysis_type == 'summary' and date_str and group_id:
+                                        web_server.db.store_summary_analysis(
+                                            group_id, analysis_date, hours, len(messages),
+                                            result.get('result', ''),
+                                            is_local_ai=result.get('is_local', False)
+                                        )
                                 else:
                                     web_server._analysis_jobs[job_id]['status'] = 'error'
                                     web_server._analysis_jobs[job_id]['error'] = result.get('error', 'Analysis failed')
@@ -2032,6 +2299,71 @@ class ModularWebServer:
                             group_name=group_name,
                             hours=hours
                         )
+
+                        # Save to cache for ALL analysis types
+                        if result and result.get('status') == 'success':
+                            from datetime import datetime
+                            analysis_date = None
+                            date_range_start = None
+                            date_range_end = None
+
+                            if date_str:
+                                analysis_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                            if start_date_str:
+                                date_range_start = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                            if end_date_str:
+                                date_range_end = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+                            # Store in generic cache for all analysis types
+                            web_server.db.store_ai_analysis_cache(
+                                analysis_type=analysis_type,
+                                analysis_result=result.get('result', ''),
+                                message_count=len(messages),
+                                group_id=group_id,
+                                sender_uuid=sender_id,
+                                analysis_date=analysis_date,
+                                date_range_start=date_range_start,
+                                date_range_end=date_range_end,
+                                hours=hours,
+                                attachments_only=attachments_only,
+                                ai_provider=result.get('ai_provider'),
+                                is_local_ai=result.get('is_local', False)
+                            )
+
+                            # Also store in legacy tables for backward compatibility
+                            if analysis_type == 'sentiment' and date_str and group_id:
+                                web_server.db.store_sentiment_analysis(
+                                    group_id, analysis_date, len(messages),
+                                    result.get('result', ''),
+                                    is_local_ai=result.get('is_local', False)
+                                )
+                            elif analysis_type == 'summary' and date_str and group_id:
+                                web_server.db.store_summary_analysis(
+                                    group_id, analysis_date, hours, len(messages),
+                                    result.get('result', ''),
+                                    is_local_ai=result.get('is_local', False)
+                                )
+
+                            # Convert analyzed_at timestamp to user timezone before sending
+                            if result.get('analyzed_at'):
+                                from datetime import datetime
+                                import pytz
+
+                                # Parse the UTC ISO timestamp
+                                analyzed_dt = datetime.fromisoformat(result['analyzed_at'])
+
+                                # Convert to user timezone
+                                prefs_service = UserPreferencesService(web_server.db)
+                                user_timezone = prefs_service.get_timezone()
+
+                                if user_timezone and user_timezone != 'UTC':
+                                    try:
+                                        user_tz = pytz.timezone(user_timezone)
+                                        analyzed_dt = analyzed_dt.astimezone(user_tz)
+                                        result['analyzed_at'] = analyzed_dt.isoformat()
+                                    except:
+                                        pass  # Keep UTC if conversion fails
+
                         self._send_json_response(result)
 
                 except Exception as e:
@@ -2073,7 +2405,38 @@ class ModularWebServer:
                         if old_job['status'] in ['completed', 'error'] and current_time - old_job['created'] > 300:
                             del web_server._analysis_jobs[old_job_id]
 
-                    self._send_json_response(job)
+                    # Convert analyzed_at timestamp to user timezone if present
+                    response_job = job.copy()
+                    if job['status'] == 'completed' and job.get('result') and job['result'].get('analyzed_at'):
+                        from datetime import datetime
+                        import pytz
+
+                        # Get user timezone
+                        prefs_service = UserPreferencesService(web_server.db)
+                        user_timezone = prefs_service.get_timezone()
+
+                        # Parse the ISO timestamp
+                        analyzed_dt = datetime.fromisoformat(job['result']['analyzed_at'])
+
+                        # If no timezone info, assume it's in server local time
+                        if analyzed_dt.tzinfo is None:
+                            # Get server timezone and localize
+                            server_tz = pytz.timezone('UTC')  # Assume UTC for server
+                            analyzed_dt = server_tz.localize(analyzed_dt)
+
+                        # Convert to user timezone
+                        if user_timezone and user_timezone != 'UTC':
+                            try:
+                                user_tz = pytz.timezone(user_timezone)
+                                analyzed_dt = analyzed_dt.astimezone(user_tz)
+                            except:
+                                pass
+
+                        # Update the response with converted timestamp
+                        response_job['result'] = job['result'].copy()
+                        response_job['result']['analyzed_at'] = analyzed_dt.isoformat()
+
+                    self._send_json_response(response_job)
 
                 except Exception as e:
                     self._send_json_response({

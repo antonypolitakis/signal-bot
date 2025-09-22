@@ -414,35 +414,27 @@ class MessagesPage(BasePage):
                         where_clause = "WHERE " + " AND ".join(where_conditions)
 
                     # Get hourly counts across all days with timezone conversion
-                    try:
-                        from zoneinfo import ZoneInfo
-                        from datetime import datetime
+                    # Calculate timezone offset using centralized approach
+                    offset_seconds = 0
+                    if user_timezone and user_timezone != 'UTC':
+                        try:
+                            from zoneinfo import ZoneInfo
+                            from datetime import datetime
+                            tz = ZoneInfo(user_timezone)
+                            now = datetime.now(tz)
+                            offset_seconds = tz.utcoffset(now).total_seconds()
+                        except:
+                            offset_seconds = 0
 
-                        # Calculate timezone offset for SQL query
-                        tz = ZoneInfo(user_timezone)
-                        now = datetime.now(tz)
-                        offset_seconds = tz.utcoffset(now).total_seconds()
-
-                        cursor.execute(f"""
-                            SELECT
-                                CAST((m.timestamp / 1000 + ?) / 3600 % 24 AS INTEGER) as hour,
-                                COUNT(*) as message_count
-                            FROM messages m
-                            {where_clause}
-                            GROUP BY hour
-                            ORDER BY hour
-                        """, [offset_seconds] + params)
-                    except ImportError:
-                        # Fallback to UTC if zoneinfo not available
-                        cursor.execute(f"""
-                            SELECT
-                                CAST(strftime('%H', datetime(m.timestamp/1000, 'unixepoch')) AS INTEGER) as hour,
-                                COUNT(*) as message_count
-                            FROM messages m
-                            {where_clause}
-                            GROUP BY hour
-                            ORDER BY hour
-                        """, params)
+                    cursor.execute(f"""
+                        SELECT
+                            CAST((m.timestamp / 1000 + ?) / 3600 % 24 AS INTEGER) as hour,
+                            COUNT(*) as message_count
+                        FROM messages m
+                        {where_clause}
+                        GROUP BY hour
+                        ORDER BY hour
+                    """, [offset_seconds] + params)
 
                     activity_data = {}
                     for row in cursor.fetchall():
@@ -685,48 +677,35 @@ class MessagesPage(BasePage):
                         conditions.append("EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = m.id)")
 
                     # Add date filter with timezone support
-                    conditions.append("DATE(datetime(m.timestamp/1000, 'unixepoch', ?)) = ?")
-                    try:
-                        from zoneinfo import ZoneInfo
-                        from datetime import datetime
-                        tz = ZoneInfo(user_timezone)
-                        now = datetime.now(tz)
-                        offset_hours = int(tz.utcoffset(now).total_seconds() / 3600)
-                        offset_str = f"{'+' if offset_hours >= 0 else ''}{offset_hours} hours"
-                        params.extend([offset_str, date_param])
-                    except:
-                        params.extend(['0 hours', date_param])
+                    # Use database's centralized date conversion
+                    start_timestamp, end_timestamp = self.db._convert_date_to_utc_range(date_param, user_timezone)
+                    conditions.append("m.timestamp >= ? AND m.timestamp <= ?")
+                    params.extend([start_timestamp, end_timestamp])
 
                     where_clause = "WHERE " + " AND ".join(conditions)
 
                     # Get hourly counts with timezone conversion
-                    try:
-                        from zoneinfo import ZoneInfo
-                        from datetime import datetime
-                        tz = ZoneInfo(user_timezone)
-                        now = datetime.now(tz)
-                        offset_seconds = tz.utcoffset(now).total_seconds()
+                    # Calculate timezone offset for SQL query using centralized approach
+                    offset_seconds = 0
+                    if user_timezone and user_timezone != 'UTC':
+                        try:
+                            from zoneinfo import ZoneInfo
+                            from datetime import datetime
+                            tz = ZoneInfo(user_timezone)
+                            now = datetime.now(tz)
+                            offset_seconds = tz.utcoffset(now).total_seconds()
+                        except:
+                            offset_seconds = 0
 
-                        cursor.execute(f"""
-                            SELECT
-                                CAST((m.timestamp / 1000 + ?) / 3600 % 24 AS INTEGER) as hour,
-                                COUNT(*) as message_count
-                            FROM messages m
-                            {where_clause}
-                            GROUP BY hour
-                            ORDER BY hour
-                        """, [offset_seconds] + params)
-                    except ImportError:
-                        # Fallback to UTC
-                        cursor.execute(f"""
-                            SELECT
-                                CAST(strftime('%H', datetime(m.timestamp/1000, 'unixepoch')) AS INTEGER) as hour,
-                                COUNT(*) as message_count
-                            FROM messages m
-                            {where_clause}
-                            GROUP BY hour
-                            ORDER BY hour
-                        """, params)
+                    cursor.execute(f"""
+                        SELECT
+                            CAST((m.timestamp / 1000 + ?) / 3600 % 24 AS INTEGER) as hour,
+                            COUNT(*) as message_count
+                        FROM messages m
+                        {where_clause}
+                        GROUP BY hour
+                        ORDER BY hour
+                    """, [offset_seconds] + params)
 
                     activity_data = {}
                     for row in cursor.fetchall():
@@ -753,35 +732,27 @@ class MessagesPage(BasePage):
                         where_clause = "WHERE " + " AND ".join(where_conditions)
 
                     # Get hourly counts across all days with timezone conversion
-                    try:
-                        from zoneinfo import ZoneInfo
-                        from datetime import datetime
+                    # Calculate timezone offset using centralized approach
+                    offset_seconds = 0
+                    if user_timezone and user_timezone != 'UTC':
+                        try:
+                            from zoneinfo import ZoneInfo
+                            from datetime import datetime
+                            tz = ZoneInfo(user_timezone)
+                            now = datetime.now(tz)
+                            offset_seconds = tz.utcoffset(now).total_seconds()
+                        except:
+                            offset_seconds = 0
 
-                        # Calculate timezone offset for SQL query
-                        tz = ZoneInfo(user_timezone)
-                        now = datetime.now(tz)
-                        offset_seconds = tz.utcoffset(now).total_seconds()
-
-                        cursor.execute(f"""
-                            SELECT
-                                CAST((m.timestamp / 1000 + ?) / 3600 % 24 AS INTEGER) as hour,
-                                COUNT(*) as message_count
-                            FROM messages m
-                            {where_clause}
-                            GROUP BY hour
-                            ORDER BY hour
-                        """, [offset_seconds] + params)
-                    except ImportError:
-                        # Fallback to UTC if zoneinfo not available
-                        cursor.execute(f"""
-                            SELECT
-                                CAST(strftime('%H', datetime(m.timestamp/1000, 'unixepoch')) AS INTEGER) as hour,
-                                COUNT(*) as message_count
-                            FROM messages m
-                            {where_clause}
-                            GROUP BY hour
-                            ORDER BY hour
-                        """, params)
+                    cursor.execute(f"""
+                        SELECT
+                            CAST((m.timestamp / 1000 + ?) / 3600 % 24 AS INTEGER) as hour,
+                            COUNT(*) as message_count
+                        FROM messages m
+                        {where_clause}
+                        GROUP BY hour
+                        ORDER BY hour
+                    """, [offset_seconds] + params)
 
                     activity_data = {}
                     for row in cursor.fetchall():

@@ -726,10 +726,24 @@ class ComprehensiveDashboard(BasePage):
                     backup_info['size'] = self.format_size(latest.stat().st_size)
                     backup_info['count'] = len(backups)
 
-                    # Calculate next backup (assuming daily at 2 AM)
-                    next_backup = datetime.now().replace(hour=2, minute=0, second=0)
-                    if datetime.now().hour >= 2:
-                        next_backup += timedelta(days=1)
+                    # Calculate next backup (assuming daily at 2 AM in user's timezone)
+                    import pytz
+                    from services.user_preferences import UserPreferencesService
+                    prefs_service = UserPreferencesService(self.db)
+                    user_timezone = prefs_service.get_timezone()
+
+                    try:
+                        tz = pytz.timezone(user_timezone)
+                        now = datetime.now(tz)
+                        next_backup = now.replace(hour=2, minute=0, second=0, microsecond=0)
+                        if now.hour >= 2:
+                            next_backup += timedelta(days=1)
+                    except:
+                        # Fallback to server time if timezone fails
+                        next_backup = datetime.now().replace(hour=2, minute=0, second=0)
+                        if datetime.now().hour >= 2:
+                            next_backup += timedelta(days=1)
+
                     backup_info['next'] = next_backup.strftime("%Y-%m-%d %H:%M")
 
         except Exception as e:

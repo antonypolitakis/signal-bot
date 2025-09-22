@@ -200,32 +200,56 @@ class AIAnalysisService:
                 'message_count': len(messages)
             }
 
-        # Format messages for AI
-        formatted_messages = self._format_messages(
-            messages,
-            anonymize=config.get('anonymize_external', True),
-            include_names=config.get('include_sender_names', True)
-        )
-
-        if not formatted_messages:
-            return {
-                'status': 'no_messages',
-                'error': 'No valid messages to analyze',
-                'message_count': 0
-            }
-
-        # Prepare prompt from template
-        prompt_template = config.get('prompt_template', '')
-        prompt = prompt_template.format(
-            group_name=group_name or 'Unknown Group',
-            hours=hours,
-            message_count=len(messages),
-            messages=formatted_messages
-        )
-
-        # Send to AI provider
+        # Send to AI provider first to check if it's local
         try:
-            self.logger.info(f"Running {config['display_name']} analysis with AI provider")
+            from services.ai_provider import get_ai_manager
+            ai_manager = get_ai_manager()
+
+            # Check if the active provider is local (Ollama)
+            provider_status = ai_manager.get_provider_status()
+            is_local_ai = False
+
+            for provider in provider_status.get('providers', []):
+                if provider.get('available') and provider.get('name') == 'Ollama':
+                    is_local_ai = True
+                    break
+
+            # Format messages based on whether AI is local or external
+            # Don't anonymize for local AI since data stays on-premises
+            formatted_messages = self._format_messages(
+                messages,
+                anonymize=False if is_local_ai else config.get('anonymize_external', True),
+                include_names=config.get('include_sender_names', True)
+            )
+
+            if not formatted_messages:
+                return {
+                    'status': 'no_messages',
+                    'error': 'No valid messages to analyze',
+                    'message_count': 0
+                }
+
+            # Prepare prompt from template
+            prompt_template = config.get('prompt_template', '')
+            prompt = prompt_template.format(
+                group_name=group_name or 'Unknown Group',
+                hours=hours,
+                message_count=len(messages),
+                messages=formatted_messages
+            )
+
+            self.logger.info(f"Running {config['display_name']} analysis with AI provider (local={is_local_ai})")
+
+            # Debug log to verify anonymization behavior
+            if is_local_ai:
+                self.logger.info("Using LOCAL AI - sending FULL NAMES (not anonymized)")
+                # Log first few lines of the prompt to verify
+                preview_lines = formatted_messages.split('\n')[:3]
+                for line in preview_lines:
+                    self.logger.debug(f"Sample message: {line}")
+            else:
+                self.logger.info("Using EXTERNAL AI - sending ANONYMIZED names")
+
             result = get_ai_response(prompt, timeout=60)
 
             if result['success']:
@@ -233,6 +257,10 @@ class AIAnalysisService:
 
                 # Convert markdown to HTML
                 converted_result = self._convert_markdown_to_html(result['response'])
+
+                # Create UTC timestamp for consistency
+                from datetime import timezone
+                analyzed_timestamp = datetime.now(timezone.utc).isoformat()
 
                 return {
                     'status': 'success',
@@ -242,7 +270,7 @@ class AIAnalysisService:
                     'group_name': group_name,
                     'hours': hours,
                     'message_count': len(messages),
-                    'analyzed_at': datetime.now().isoformat(),
+                    'analyzed_at': analyzed_timestamp,
                     'ai_provider': result.get('provider', 'unknown'),
                     'is_local': result.get('is_local', False)
                 }

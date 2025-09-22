@@ -278,3 +278,59 @@ def parse_bool(value: Any) -> bool:
         return value.lower() in ('true', 'yes', '1', 'on', 'enabled')
 
     return bool(value)
+
+
+def convert_markdown_to_html(text: str) -> str:
+    """
+    Convert markdown text to HTML using Python markdown library.
+
+    Args:
+        text: Markdown text to convert
+
+    Returns:
+        HTML formatted text, or original text if markdown library unavailable
+    """
+    if not text:
+        return text
+
+    try:
+        import markdown
+        # Configure markdown with useful extensions
+        md = markdown.Markdown(extensions=['tables', 'fenced_code', 'nl2br'])
+        return md.convert(text)
+    except ImportError:
+        # Fallback to basic conversion if markdown library not available
+        return _basic_markdown_to_html(text)
+    except Exception:
+        # If conversion fails, return original text
+        return text
+
+
+def _basic_markdown_to_html(text: str) -> str:
+    """
+    Basic markdown to HTML conversion as fallback.
+
+    Args:
+        text: Markdown text to convert
+
+    Returns:
+        Basic HTML formatted text
+    """
+    if not text:
+        return text
+
+    html = text
+
+    # Headers
+    html = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
+    html = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
+    html = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
+
+    # Bold and italic
+    html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
+    html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
+
+    # Line breaks
+    html = html.replace('\n', '<br>\n')
+
+    return html

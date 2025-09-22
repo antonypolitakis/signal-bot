@@ -272,6 +272,27 @@ class DatabaseManager:
                 )
             """)
 
+            # Generic AI Analysis Cache (for all analysis types)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS ai_analysis_cache (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    analysis_type TEXT NOT NULL,
+                    group_id TEXT,
+                    sender_uuid TEXT,
+                    analysis_date DATE,
+                    date_range_start DATE,
+                    date_range_end DATE,
+                    hours INTEGER DEFAULT 24,
+                    attachments_only BOOLEAN DEFAULT FALSE,
+                    message_count INTEGER NOT NULL,
+                    analysis_result TEXT NOT NULL,
+                    ai_provider TEXT,
+                    is_local_ai BOOLEAN DEFAULT FALSE,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(analysis_type, group_id, sender_uuid, analysis_date, date_range_start, date_range_end, hours, attachments_only)
+                )
+            """)
+
             # Message mentions
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS mentions (
@@ -293,6 +314,7 @@ class DatabaseManager:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_processed_timestamp ON processed_messages(timestamp)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_sentiment_group_date ON sentiment_analysis(group_id, analysis_date)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_summary_group_date ON summary_analysis(group_id, analysis_date)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_cache_lookup ON ai_analysis_cache(analysis_type, group_id, analysis_date)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_mentions_message ON mentions(message_id)")
 
             self.logger.info("Database initialized with UUID-based schema")
@@ -894,7 +916,8 @@ class DatabaseManager:
 
     def cleanup_old_messages(self, days: int = 30) -> None:
         """Clean up old processed messages."""
-        cutoff_date = datetime.now() - timedelta(days=days)
+        from datetime import timezone
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -1256,6 +1279,96 @@ class DatabaseManager:
             """, (group_id, days))
 
             return [dict(row) for row in cursor.fetchall()]
+
+    # Generic AI Analysis Cache Methods
+    def get_ai_analysis_cache(self, analysis_type: str, group_id: Optional[str] = None,
+                              sender_uuid: Optional[str] = None, analysis_date: Optional[date] = None,
+                              date_range_start: Optional[date] = None, date_range_end: Optional[date] = None,
+                              hours: int = 24, attachments_only: bool = False) -> Optional[Dict[str, Any]]:
+        """Get cached AI analysis result."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Build query based on provided parameters
+            conditions = ["analysis_type = ?"]
+            params = [analysis_type]
+
+            # Handle None values properly in the UNIQUE constraint
+            if group_id:
+                conditions.append("group_id = ?")
+                params.append(group_id)
+            else:
+                conditions.append("group_id IS NULL")
+
+            if sender_uuid:
+                conditions.append("sender_uuid = ?")
+                params.append(sender_uuid)
+            else:
+                conditions.append("sender_uuid IS NULL")
+
+            if analysis_date:
+                conditions.append("analysis_date = ?")
+                params.append(analysis_date.strftime('%Y-%m-%d'))
+            else:
+                conditions.append("analysis_date IS NULL")
+
+            if date_range_start:
+                conditions.append("date_range_start = ?")
+                params.append(date_range_start.strftime('%Y-%m-%d'))
+            else:
+                conditions.append("date_range_start IS NULL")
+
+            if date_range_end:
+                conditions.append("date_range_end = ?")
+                params.append(date_range_end.strftime('%Y-%m-%d'))
+            else:
+                conditions.append("date_range_end IS NULL")
+
+            conditions.append("hours = ?")
+            params.append(hours)
+            conditions.append("attachments_only = ?")
+            params.append(1 if attachments_only else 0)
+
+            query = f"""
+                SELECT analysis_result, message_count, ai_provider, is_local_ai, created_at
+                FROM ai_analysis_cache
+                WHERE {' AND '.join(conditions)}
+            """
+
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def store_ai_analysis_cache(self, analysis_type: str, analysis_result: str,
+                                message_count: int, group_id: Optional[str] = None,
+                                sender_uuid: Optional[str] = None, analysis_date: Optional[date] = None,
+                                date_range_start: Optional[date] = None, date_range_end: Optional[date] = None,
+                                hours: int = 24, attachments_only: bool = False,
+                                ai_provider: Optional[str] = None, is_local_ai: bool = False) -> None:
+        """Store AI analysis result in cache."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                INSERT OR REPLACE INTO ai_analysis_cache
+                (analysis_type, group_id, sender_uuid, analysis_date, date_range_start,
+                 date_range_end, hours, attachments_only, message_count, analysis_result,
+                 ai_provider, is_local_ai)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                analysis_type,
+                group_id,
+                sender_uuid,
+                analysis_date.strftime('%Y-%m-%d') if analysis_date else None,
+                date_range_start.strftime('%Y-%m-%d') if date_range_start else None,
+                date_range_end.strftime('%Y-%m-%d') if date_range_end else None,
+                hours,
+                1 if attachments_only else 0,
+                message_count,
+                analysis_result,
+                ai_provider,
+                1 if is_local_ai else 0
+            ))
 
     def get_hourly_message_counts(self, target_date: date, user_timezone: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get hourly message counts by group for a specific date."""
@@ -1877,10 +1990,10 @@ class DatabaseManager:
             return False
 
         # Check if heartbeat is recent
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         try:
             last_heartbeat = datetime.fromisoformat(status['last_heartbeat'])
-            cutoff = datetime.now() - timedelta(minutes=max_heartbeat_age_minutes)
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=max_heartbeat_age_minutes)
             return last_heartbeat > cutoff
         except:
             return False

@@ -101,7 +101,7 @@ function showAnalysisPreview() {
 }
 
 // Run the selected analysis
-function runAnalysis() {
+function runAnalysis(forceRefresh = false) {
     const filters = SignalBotUtils.getGlobalFilters();
     const typeSelect = document.getElementById('analysis-type-select');
 
@@ -142,6 +142,7 @@ function runAnalysis() {
         hours: filters.hours,
         date_mode: filters.dateMode,
         attachments_only: filters.attachmentsOnly,
+        force: forceRefresh ? 'true' : 'false',  // Add force refresh parameter
         async: 'true'  // Use async mode for better UX
     };
 
@@ -199,6 +200,14 @@ function renderAnalysisResults(data) {
 
         // Add metadata
         html += '<div class="metadata" style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #dee2e6; font-size: 0.9em; color: #6c757d;">';
+
+        // Cache indicator
+        if (data.cached === true) {
+            html += '<span style="background: #ffc107; color: #000; padding: 2px 8px; border-radius: 4px; margin-right: 10px;">📦 CACHED RESULT</span>';
+        } else {
+            html += '<span style="background: #28a745; color: #fff; padding: 2px 8px; border-radius: 4px; margin-right: 10px;">✨ FRESH ANALYSIS</span>';
+        }
+
         html += '<span>Analyzed at: ' + new Date(data.analyzed_at).toLocaleString() + '</span>';
         if (data.ai_provider) {
             html += ' | <span>AI: ' + data.ai_provider;
@@ -209,6 +218,12 @@ function renderAnalysisResults(data) {
             }
             html += '</span>';
         }
+
+        // Add force refresh button if result was cached
+        if (data.cached === true) {
+            html += ' | <button onclick="runAnalysis(true)" style="background: #007bff; color: white; border: none; padding: 2px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85em;">🔄 Force Refresh</button>';
+        }
+
         html += '</div>';
 
         // Render the actual result (already converted to HTML on server)
